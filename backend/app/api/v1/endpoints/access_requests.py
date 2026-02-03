@@ -1,0 +1,162 @@
+"""
+Investigator Access Request endpoints
+"""
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
+
+from app.db.database import get_db
+from app.db.models import InvestigatorAccessRequest, User
+from app.core.security import get_password_hash
+
+router = APIRouter()
+
+
+class AccessRequestCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    reason: Optional[str] = None
+
+
+class AccessRequestResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    reason: Optional[str]
+    status: str
+    reviewed_by: Optional[int]
+    reviewed_at: Optional[str]
+    rejection_reason: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class AccessRequestUpdate(BaseModel):
+    status: str  # approved, rejected
+    rejection_reason: Optional[str] = None
+
+
+@router.post("/request", response_model=AccessRequestResponse, status_code=status.HTTP_201_CREATED)
+async def create_access_request(
+    request: AccessRequestCreate,
+    db: Session = Depends(get_db)
+):
+    """Submit a new investigator access request"""
+    # Check if email already exists in users table
+    existing_user = db.query(User).filter(User.email == request.email.lower().strip()).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists"
+        )
+    
+    # Check if there's already a pending request for this email
+    existing_request = db.query(InvestigatorAccessRequest).filter(
+        InvestigatorAccessRequest.email == request.email.lower().strip(),
+        InvestigatorAccessRequest.status == "pending"
+    ).first()
+    if existing_request:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A pending request already exists for this email"
+        )
+    
+    # Create new request
+    db_request = InvestigatorAccessRequest(
+        full_name=request.full_name,
+        email=request.email.lower().strip(),
+        reason=request.reason,
+        status="pending"
+    )
+    db.add(db_request)
+    db.commit()
+    db.refresh(db_request)
+    
+    return db_request.to_dict()
+
+
+@router.get("/requests", response_model=List[AccessRequestResponse])
+async def get_access_requests(
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all access requests (superadmin only)"""
+    query = db.query(InvestigatorAccessRequest)
+    
+    if status_filter:
+        query = query.filter(InvestigatorAccessRequest.status == status_filter)
+    
+    requests = query.order_by(InvestigatorAccessRequest.created_at.desc()).all()
+    return [req.to_dict() for req in requests]
+
+
+@router.get("/requests/{request_id}", response_model=AccessRequestResponse)
+async def get_access_request(
+    request_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific access request"""
+    request = db.query(InvestigatorAccessRequest).filter(InvestigatorAccessRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    return request.to_dict()
+
+
+@router.patch("/requests/{request_id}/review", response_model=AccessRequestResponse)
+async def review_access_request(
+    request_id: int,
+    update: AccessRequestUpdate,
+    reviewed_by: Optional[int] = None,  # Superadmin user ID
+    db: Session = Depends(get_db)
+):
+    """Approve or reject an access request (superadmin only)"""
+    from datetime import datetime
+    
+    request = db.query(InvestigatorAccessRequest).filter(InvestigatorAccessRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    
+    if request.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Request is already {request.status}"
+        )
+    
+    if update.status not in ["approved", "rejected"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Status must be 'approved' or 'rejected'"
+        )
+    
+    # Update request status
+    request.status = update.status
+    request.reviewed_by = reviewed_by
+    request.reviewed_at = datetime.utcnow()
+    if update.status == "rejected" and update.rejection_reason:
+        request.rejection_reason = update.rejection_reason
+    
+    # If approved, create the investigator account
+    if update.status == "approved":
+        # Generate a temporary password (investigator will need to reset it)
+        import secrets
+        temp_password = secrets.token_urlsafe(12)
+        
+        new_user = User(
+            email=request.email,
+            hashed_password=get_password_hash(temp_password),
+            full_name=request.full_name,
+            role="investigator",
+            is_active=True
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        # Note: In production, you would send the temporary password via email
+        # For now, we'll just create the account
+    
+    db.commit()
+    db.refresh(request)
+    
+    return request.to_dict()

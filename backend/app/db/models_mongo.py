@@ -3,32 +3,30 @@ MongoDB models/schemas for incident reports
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any, Annotated
+from pydantic import BaseModel, Field, BeforeValidator
 from bson import ObjectId
 
 
-class PyObjectId(ObjectId):
-    """Custom ObjectId for Pydantic"""
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+def validate_object_id(v: Any) -> ObjectId:
+    """Validate and convert to ObjectId"""
+    if isinstance(v, ObjectId):
+        return v
+    if isinstance(v, str):
+        if ObjectId.is_valid(v):
+            return ObjectId(v)
+        raise ValueError("Invalid ObjectId string")
+    raise ValueError("Invalid ObjectId type")
 
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
 
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+# Pydantic v2 compatible ObjectId type
+PyObjectId = Annotated[ObjectId, BeforeValidator(validate_object_id)]
 
 
 class IncidentReportMongo(BaseModel):
     """MongoDB model for incident reports"""
     
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     wallet_address: str
     user_description: str
     risk_score: float
@@ -45,11 +43,11 @@ class IncidentReportMongo(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        json_schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+        "json_schema_extra": {
             "example": {
                 "wallet_address": "WALLET_XYZ",
                 "user_description": "Suspicious activity reported",
@@ -69,3 +67,4 @@ class IncidentReportMongo(BaseModel):
                 "system_conclusion": "AI-generated conclusion..."
             }
         }
+    }

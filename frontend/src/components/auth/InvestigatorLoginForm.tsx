@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Shield, Lock, Mail, Terminal, AlertTriangle, Eye, EyeOff, Users, Activity, FolderOpen } from "lucide-react";
+import { Shield, Lock, Mail, Terminal, AlertTriangle, Eye, EyeOff, Users, Activity, FolderOpen, CheckCircle } from "lucide-react";
 
 export function InvestigatorLoginForm() {
   const [email, setEmail] = useState("");
@@ -244,6 +244,13 @@ export function InvestigatorLoginForm() {
         </div>
       </div>
 
+      {/* Request Access Section */}
+      <div className="mt-6 pt-6 border-t border-emerald-500/20">
+        <div className="text-center">
+          <RequestAccessButton />
+        </div>
+      </div>
+
       <div className="text-center mt-6 space-y-2">
         <p className="text-xs text-gray-600 font-mono flex items-center justify-center gap-2">
           <span className="text-emerald-400">█</span>
@@ -252,5 +259,169 @@ export function InvestigatorLoginForm() {
         </p>
       </div>
     </div>
+  );
+}
+
+function RequestAccessButton() {
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: "",
+    email: "",
+    reason: ""
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus("idle");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("http://localhost:3000/api/v1/access-requests/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setSubmitStatus("success");
+        setFormData({ full_name: "", email: "", reason: "" });
+        setTimeout(() => {
+          setShowModal(false);
+          setSubmitStatus("idle");
+        }, 2000);
+      } else {
+        const error = await response.json();
+        setSubmitStatus("error");
+        setErrorMessage(error.detail || "Failed to submit request");
+      }
+    } catch (error) {
+      setSubmitStatus("error");
+      setErrorMessage("Network error. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="group/create relative w-full px-6 py-3 bg-gradient-to-r from-gray-900/60 to-black/60 border border-emerald-500/30 hover:border-emerald-400/60 rounded-lg transition-all duration-300 overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 opacity-0 group-hover/create:opacity-100 transition-opacity"></div>
+        <span className="relative flex items-center justify-center gap-2 text-emerald-400 font-mono text-sm">
+          <Users className="w-4 h-4" />
+          REQUEST INVESTIGATOR ACCESS
+        </span>
+      </button>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl border border-emerald-500/30 rounded-lg shadow-2xl max-w-md w-full p-6 relative">
+            <button
+              onClick={() => {
+                setShowModal(false);
+                setSubmitStatus("idle");
+                setErrorMessage("");
+              }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-emerald-400 transition"
+            >
+              <span className="text-2xl">×</span>
+            </button>
+
+            <h2 className="text-2xl font-mono text-emerald-400 mb-4">Request Investigator Access</h2>
+            <p className="text-gray-400 text-sm font-mono mb-6">
+              Submit your request for investigator access. A superadmin will review and approve your request.
+            </p>
+
+            {submitStatus === "success" ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <p className="text-emerald-400 font-mono">Request submitted successfully!</p>
+                <p className="text-gray-500 text-sm font-mono mt-2">You will be notified once your request is reviewed.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="full_name" className="text-gray-300 font-mono text-sm mb-2 block">
+                    Full Name
+                  </Label>
+                  <Input
+                    id="full_name"
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    className="bg-black/60 border-emerald-500/40 text-gray-100 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="request_email" className="text-gray-300 font-mono text-sm mb-2 block">
+                    Email Address
+                  </Label>
+                  <Input
+                    id="request_email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="bg-black/60 border-emerald-500/40 text-gray-100 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="reason" className="text-gray-300 font-mono text-sm mb-2 block">
+                    Reason for Access (Optional)
+                  </Label>
+                  <textarea
+                    id="reason"
+                    value={formData.reason}
+                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                    className="w-full bg-black/60 border border-emerald-500/40 text-gray-100 font-mono rounded-lg p-3 min-h-[100px] resize-none"
+                    placeholder="Briefly explain why you need investigator access..."
+                  />
+                </div>
+
+                {submitStatus === "error" && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-lg">
+                    <p className="text-red-400 text-sm font-mono">{errorMessage}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      setSubmitStatus("idle");
+                      setErrorMessage("");
+                    }}
+                    className="flex-1 bg-gray-800/60 border border-gray-700/40 text-gray-300 hover:bg-gray-700/60 font-mono"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-mono"
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit Request"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

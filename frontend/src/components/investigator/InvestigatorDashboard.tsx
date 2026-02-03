@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Shield, FileText, Upload, FolderOpen, Brain, Phone, LogOut, Menu, X, Activity, User, RefreshCw, Bot, AlertTriangle, UploadCloud, Check, Lock, Search, Download, Calendar, Clock, Eye, BarChart3, Clipboard, MapPin, Mail, PhoneCall, Filter, MoreVertical } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Shield, FileText, Upload, FolderOpen, Brain, Phone, LogOut, Menu, X, Activity, User, RefreshCw, Bot, AlertTriangle, UploadCloud, Check, Lock, Search, Download, Calendar, Clock, Eye, EyeOff, BarChart3, Clipboard, MapPin, Mail, PhoneCall, Filter, MoreVertical, KeyRound, CheckCircle, XCircle, Bell, ChevronDown, Send, TrendingUp, Target, Award } from "lucide-react";
 import { IncidentReportDisplay } from "./IncidentReportDisplay";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -17,13 +18,94 @@ interface InvestigatorDashboardProps {
   setCurrentPage: (page: "landing" | "admin-login" | "investigator-login" | "admin-dashboard" | "investigator-dashboard") => void;
 }
 
-type InvestigatorSection = "incident-report" | "evidence-upload" | "evidence-library" | "ai-analysis" | "contact-police";
+type InvestigatorSection =
+  | "incident-report"
+  | "evidence-upload"
+  | "evidence-library"
+  | "ai-analysis"
+  | "watchlist"
+  | "contact-police"
+  | "complaint-history"
+  | "messages"
+  | "reset-password"
+  | "my-dashboard"
+  | "status-update";
 
 export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardProps) {
   const [activeSection, setActiveSection] = useState<InvestigatorSection>("incident-report");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [evidenceWalletFilter, setEvidenceWalletFilter] = useState("");
+  const [investigatorEmail, setInvestigatorEmail] = useState<string>("");
+  const [investigatorName, setInvestigatorName] = useState<string>("");
+  const [investigatorId, setInvestigatorId] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    // Get logged-in investigator email from localStorage
+    const email = localStorage.getItem("investigator_email") || localStorage.getItem("admin_email") || "";
+    setInvestigatorEmail(email);
+    
+    // Fetch current user information
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("admin_token");
+      if (!token) return;
+      
+      try {
+        const response = await fetch("http://localhost:3000/api/v1/auth/me", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setInvestigatorId(userData.id || null);
+          if (userData.full_name && userData.full_name.trim() !== "" && userData.full_name !== "Investigator") {
+            setInvestigatorName(userData.full_name);
+          } else if (userData.email) {
+            // If no full_name or it's the default "Investigator", use email username as fallback
+            const emailUsername = userData.email.split("@")[0];
+            // Capitalize first letter
+            setInvestigatorName(emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1));
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user info:", error);
+      }
+    };
+    
+    fetchUserInfo();
+  }, []);
+
+  // Fetch unread message count
+  useEffect(() => {
+    if (!investigatorId) return;
+    
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/unread-count`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setUnreadCount(data.unread_count || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching unread count:", error);
+      }
+    };
+
+    fetchUnreadCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [investigatorId]);
 
   const handleLogout = () => {
+    localStorage.removeItem("investigator_token");
+    localStorage.removeItem("investigator_email");
     setCurrentPage("landing");
   };
 
@@ -32,7 +114,13 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
     { id: "evidence-upload" as InvestigatorSection, label: "Evidence Upload", icon: Upload, color: "cyan" },
     { id: "evidence-library" as InvestigatorSection, label: "Evidence Library", icon: FolderOpen, color: "emerald" },
     { id: "ai-analysis" as InvestigatorSection, label: "AI Analysis History", icon: Brain, color: "cyan" },
-    { id: "contact-police" as InvestigatorSection, label: "Contact Police", icon: Phone, color: "emerald" },
+    { id: "watchlist" as InvestigatorSection, label: "Watchlist & Monitoring", icon: Shield, color: "emerald" },
+    { id: "contact-police" as InvestigatorSection, label: "File Complaint", icon: Phone, color: "emerald" },
+    { id: "complaint-history" as InvestigatorSection, label: "Complaint History", icon: Clipboard, color: "cyan" },
+    { id: "messages" as InvestigatorSection, label: "Messages", icon: Mail, color: "purple" },
+    { id: "my-dashboard" as InvestigatorSection, label: "My Dashboard", icon: BarChart3, color: "cyan" },
+    { id: "status-update" as InvestigatorSection, label: "Status Update", icon: Activity, color: "emerald" },
+    { id: "reset-password" as InvestigatorSection, label: "Reset Password", icon: KeyRound, color: "yellow" },
   ];
 
   return (
@@ -67,8 +155,15 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
                 </div>
                 <div>
-                  <h1 className="text-lg text-emerald-400 font-mono">INVESTIGATOR</h1>
+                  <h1 className="text-lg text-emerald-400 font-mono">
+                    {investigatorName || "INVESTIGATOR"}
+                  </h1>
                   <p className="text-xs text-gray-500 font-mono">Field Operations</p>
+                  {investigatorEmail && (
+                    <p className="text-xs text-cyan-400 font-mono mt-1 truncate" title={investigatorEmail}>
+                      {investigatorEmail}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -93,6 +188,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
+                const showBadge = item.id === "messages" && unreadCount > 0;
                 return (
                   <button
                     key={item.id}
@@ -106,8 +202,15 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
                     {isActive && (
                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 animate-pulse"></div>
                     )}
-                    <Icon className={`w-5 h-5 relative z-10 ${isActive ? "text-emerald-400" : "text-gray-500 group-hover:text-cyan-400"}`} />
-                    <span className="relative z-10">{item.label}</span>
+                    <div className="relative">
+                      <Icon className={`w-5 h-5 relative z-10 ${isActive ? "text-emerald-400" : "text-gray-500 group-hover:text-cyan-400"}`} />
+                      {showBadge && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-xs text-white font-bold z-20 border-2 border-black">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <span className="relative z-10 flex-1 text-left">{item.label}</span>
                     {isActive && (
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-emerald-400 to-cyan-400 rounded-r"></div>
                     )}
@@ -150,15 +253,21 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
                 {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
               <div>
-                <h2 className="text-xl text-emerald-400 font-mono">
-                  {navigationItems.find((item) => item.id === activeSection)?.label}
-                </h2>
+                <h2 className="text-xl text-emerald-400 font-mono">Investigator Dashboard</h2>
                 <p className="text-xs text-gray-500 font-mono">Field Agent Operations</p>
               </div>
             </div>
 
             {/* Status indicators */}
             <div className="flex items-center gap-4">
+              {/* Notification Bell with Dropdown */}
+              {investigatorId && (
+                <NotificationBell 
+                  investigatorId={investigatorId}
+                  unreadCount={unreadCount}
+                  onViewMessages={() => setActiveSection("messages")}
+                />
+              )}
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg">
                 <div className="relative">
                   <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
@@ -172,11 +281,42 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeSection === "incident-report" && <IncidentReportSection />}
+          {activeSection === "incident-report" && <IncidentReportSection investigatorId={investigatorId} />}
           {activeSection === "evidence-upload" && <EvidenceUploadSection />}
-          {activeSection === "evidence-library" && <EvidenceLibrarySection />}
+          {activeSection === "evidence-library" && (
+            <EvidenceLibrarySection walletFilter={evidenceWalletFilter} />
+          )}
           {activeSection === "ai-analysis" && <AIAnalysisSection />}
-          {activeSection === "contact-police" && <ContactPoliceSection />}
+          {activeSection === "watchlist" && <WatchlistSection />}
+          {activeSection === "contact-police" && (
+            <ContactPoliceSection
+              onUseWalletForEvidence={(walletId: string) => {
+                setEvidenceWalletFilter(walletId);
+              }}
+            />
+          )}
+          {activeSection === "complaint-history" && <ComplaintHistorySection />}
+          {activeSection === "messages" && investigatorId && (
+            <MessagesSection 
+              investigatorId={investigatorId} 
+              onMarkAsRead={() => {
+                // Refresh unread count when message is marked as read
+                if (investigatorId) {
+                  fetch(`http://localhost:3000/api/v1/messages/investigators/${investigatorId}/unread-count`)
+                    .then(res => res.json())
+                    .then(data => setUnreadCount(data.unread_count || 0))
+                    .catch(console.error);
+                }
+              }}
+            />
+          )}
+          {activeSection === "my-dashboard" && investigatorId && (
+            <InvestigatorSelfServiceDashboard investigatorId={investigatorId} />
+          )}
+          {activeSection === "status-update" && investigatorId && (
+            <StatusUpdateSection investigatorId={investigatorId} />
+          )}
+          {activeSection === "reset-password" && <ResetPasswordSection />}
         </div>
       </div>
     </div>
@@ -184,7 +324,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
 }
 
 // Section Components
-function IncidentReportSection() {
+function IncidentReportSection({ investigatorId }: { investigatorId: number | null }) {
   const [walletAddress, setWalletAddress] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,6 +346,7 @@ function IncidentReportSection() {
         body: JSON.stringify({
           wallet_address: walletAddress,
           description: reason,
+          investigator_id: investigatorId,
         }),
       });
 
@@ -228,12 +369,33 @@ function IncidentReportSection() {
     <div className="max-w-4xl space-y-6">
       {/* Header Info */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
-        <div className="flex items-start gap-3">
-          <div className="text-2xl">📄</div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-red-500/20 rounded-lg border border-emerald-500/30">
+            <FileText className="w-5 h-5 text-emerald-400" />
+          </div>
           <div>
-            <p className="text-gray-300">
-              Enter a suspicious wallet address and describe what happened. Our AI will analyze the wallet and provide a detailed report on potential fraud or criminal activity.
-            </p>
+            <h3 className="text-lg text-emerald-400 font-mono">Incident Report</h3>
+            <p className="text-xs text-gray-500 font-mono">AI-powered wallet analysis and fraud detection</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-red-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <Bot className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">AI Analysis</p>
+              <p className="text-xs text-gray-400 font-mono">Enter wallet address and get detailed AI-powered fraud analysis</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-red-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-red-500/10 rounded-lg border border-red-500/30">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm text-red-400 font-mono mb-1">Fraud Detection</p>
+              <p className="text-xs text-gray-400 font-mono">Identify suspicious patterns and potential criminal activity</p>
+            </div>
           </div>
         </div>
       </div>
@@ -384,19 +546,64 @@ function EvidenceUploadSection() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (files.length === 0) return;
+
     setIsUploading(true);
-    setTimeout(() => {
-      console.log("Evidence uploaded:", { walletId, description, tags, riskLevel, files });
-      setIsUploading(false);
-      // Reset form
+    try {
+      // Get current user ID from token
+      const investigatorEmail = localStorage.getItem("investigator_email");
+      let investigatorId: number | null = null;
+      
+      if (investigatorEmail) {
+        try {
+          const userResponse = await fetch("http://localhost:3000/api/v1/investigators/");
+          if (userResponse.ok) {
+            const investigators = await userResponse.json();
+            const currentUser = investigators.find((inv: any) => inv.email === investigatorEmail);
+            if (currentUser) {
+              investigatorId = currentUser.id;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching investigator ID:", error);
+        }
+      }
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("wallet_id", walletId);
+        formData.append("title", file.name);
+        formData.append("description", description);
+        formData.append("tags", tags);
+        formData.append("risk_level", riskLevel);
+        if (investigatorId) {
+          formData.append("investigator_id", investigatorId.toString());
+        }
+
+        const response = await fetch("http://localhost:3000/api/v1/evidence/", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          console.error("Failed to upload evidence file", file.name, await response.text());
+        }
+      }
+
+      // Reset form after successful upload
       setWalletId("");
       setDescription("");
       setTags("");
       setRiskLevel("medium");
       setFiles([]);
-    }, 2000);
+    } catch (error) {
+      console.error("Error uploading evidence", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const getRiskColor = (level: string) => {
@@ -418,20 +625,44 @@ function EvidenceUploadSection() {
     <div className="max-w-4xl space-y-6">
       {/* Header Info */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6">
-        <ul className="space-y-3 text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Upload evidence linked to your assigned cases</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Add descriptions or notes for each file to provide context</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Every file is securely stored with a hash and timestamp to ensure authenticity</span>
-          </li>
-        </ul>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
+            <UploadCloud className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-lg text-cyan-400 font-mono">Evidence Upload</h3>
+            <p className="text-xs text-gray-500 font-mono">Securely upload and manage case evidence files</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <Upload className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm text-cyan-400 font-mono mb-1">Upload Files</p>
+              <p className="text-xs text-gray-400 font-mono">Upload evidence linked to your assigned cases</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <FileText className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">Add Context</p>
+              <p className="text-xs text-gray-400 font-mono">Add descriptions or notes for each file</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <Lock className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-400 font-mono mb-1">Secure Storage</p>
+              <p className="text-xs text-gray-400 font-mono">Files stored with hash and timestamp for authenticity</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Upload Form */}
@@ -587,52 +818,160 @@ function EvidenceUploadSection() {
   );
 }
 
-function EvidenceLibrarySection() {
+function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState("all");
+  const [evidence, setEvidence] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock evidence data
-  const evidenceFiles = [
-    {
-      id: 1,
-      filename: "transaction_screenshot_001.png",
-      walletId: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-      uploadDate: "2025-12-03",
-      uploadTime: "14:32:18",
-      fileSize: "2.4 MB",
-      fileType: "image",
-      riskLevel: "high",
-      status: "analyzed",
-      tags: ["fraud", "suspicious", "transaction"],
-    },
-  ];
+  const fetchEvidence = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/v1/evidence/");
+      if (res.ok) {
+        const data = await res.json();
+        setEvidence(data);
+      }
+    } catch (e) {
+      console.error("Error fetching evidence", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvidence();
+  }, []);
+
+  useEffect(() => {
+    if (walletFilter && walletFilter.trim()) {
+      setSearchQuery(walletFilter.trim());
+    }
+  }, [walletFilter]);
+
+  const inferFileType = (title: string): string => {
+    const lower = (title || "").toLowerCase();
+    if (lower.match(/\.(png|jpg|jpeg|gif|webp|bmp)$/)) return "image";
+    if (lower.match(/\.(pdf|doc|docx|txt|rtf|ppt|pptx)$/)) return "document";
+    if (lower.match(/\.(mp4|mov|avi|mkv|webm)$/)) return "video";
+    return "other";
+  };
+
+  const parseFromDescription = (description: string | null | undefined) => {
+    const result: { walletId: string; tags: string[] } = { walletId: "", tags: [] };
+    if (!description) return result;
+    const lines = description.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("Wallet:")) {
+        result.walletId = line.replace("Wallet:", "").trim();
+      } else if (line.startsWith("Tags:")) {
+        const tagsStr = line.replace("Tags:", "").trim();
+        if (tagsStr) {
+          result.tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean);
+        }
+      }
+    }
+    return result;
+  };
+
+  const mappedEvidence = evidence.map((item) => {
+    const title = item.title || item.evidence_id || "Evidence";
+    const createdAt = item.created_at ? new Date(item.created_at) : null;
+    const uploadDate = createdAt
+      ? createdAt.toLocaleDateString("en-GB")
+      : "—";
+    const uploadTime = createdAt
+      ? createdAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "—";
+    const { walletId, tags } = parseFromDescription(item.description);
+    const type = inferFileType(title);
+
+    return {
+      id: item.id,
+      filename: title,
+      walletId: walletId || "Unknown wallet",
+      uploadDate,
+      uploadTime,
+      fileSize: "—",
+      fileType: type,
+      riskLevel: "medium",
+      status: item.anchor_status || "pending",
+      tags,
+      hash: item.hash,
+    };
+  });
+
+  const filteredEvidenceFiles = mappedEvidence.filter((file) => {
+    const q = searchQuery.toLowerCase();
+    const matchesType = fileType === "all" || file.fileType === fileType;
+    const matchesSearch =
+      !q ||
+      file.filename.toLowerCase().includes(q) ||
+      file.walletId.toLowerCase().includes(q) ||
+      file.tags.some((t: string) => t.toLowerCase().includes(q));
+    return matchesType && matchesSearch;
+  });
 
   return (
     <div className="max-w-6xl space-y-6">
       {/* Header Info */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
-        <ul className="space-y-3 text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-emerald-400 mt-1">•</span>
-            <span>View and download all uploaded evidence files</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-emerald-400 mt-1">•</span>
-            <span>Track the status of all evidence in the system</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-emerald-400 mt-1">•</span>
-            <span>See ML analysis results for all cases</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-emerald-400 mt-1">•</span>
-            <span>Maintain a clear audit trail of all actions</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-emerald-400 mt-1">•</span>
-            <span>Access comprehensive evidence management</span>
-          </li>
-        </ul>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-lg border border-emerald-500/30">
+            <FolderOpen className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-lg text-emerald-400 font-mono">Evidence Library</h3>
+            <p className="text-xs text-gray-500 font-mono">Comprehensive evidence management and tracking</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <Eye className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">View Files</p>
+              <p className="text-xs text-gray-400 font-mono">Browse and download all uploaded evidence files</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <Activity className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm text-cyan-400 font-mono mb-1">Track Status</p>
+              <p className="text-xs text-gray-400 font-mono">Monitor evidence status across all cases</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
+              <Brain className="w-4 h-4 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm text-purple-400 font-mono mb-1">ML Analysis</p>
+              <p className="text-xs text-gray-400 font-mono">View ML analysis results for all cases</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <FileText className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-400 font-mono mb-1">Audit Trail</p>
+              <p className="text-xs text-gray-400 font-mono">Maintain clear audit trail of all actions</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/30">
+              <FolderOpen className="w-4 h-4 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm text-blue-400 font-mono mb-1">Management</p>
+              <p className="text-xs text-gray-400 font-mono">Comprehensive evidence management tools</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* View Only Badge and Search */}
@@ -690,91 +1029,406 @@ function EvidenceLibrarySection() {
             <FolderOpen className="w-5 h-5 text-emerald-400" />
             <h3 className="text-lg text-emerald-400 font-mono">All Evidence Files</h3>
             <span className="px-2 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded font-mono">
-              {evidenceFiles.length} file
+              {mappedEvidence.length} {mappedEvidence.length === 1 ? "file" : "files"}
             </span>
           </div>
         </div>
 
         {/* Evidence File Card */}
-        <div className="space-y-4">
-          {evidenceFiles.map((file) => (
-            <div
-              key={file.id}
-              className="p-5 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/30 rounded-lg hover:border-emerald-500/60 transition-all group"
-            >
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <FileText className="w-5 h-5 text-emerald-400" />
-                    <h4 className="text-gray-100 font-mono">{file.filename}</h4>
-                    <span
-                      className={`px-2 py-1 text-xs rounded font-mono ${
-                        file.riskLevel === "high"
-                          ? "bg-orange-950/40 border border-orange-500/30 text-orange-400"
-                          : file.riskLevel === "medium"
-                          ? "bg-yellow-950/40 border border-yellow-500/30 text-yellow-400"
-                          : "bg-green-950/40 border border-green-500/30 text-green-400"
-                      }`}
-                    >
-                      {file.riskLevel.toUpperCase()} RISK
-                    </span>
-                    <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
-                      {file.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-400 font-mono mb-3">Wallet: {file.walletId}</p>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {file.tags.map((tag, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 bg-gray-800/60 border border-gray-700/40 text-gray-400 text-xs rounded font-mono"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="flex flex-wrap gap-4 text-xs text-gray-500 font-mono">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {file.uploadDate}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {file.uploadTime}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <FileText className="w-3 h-3" />
-                      {file.fileSize}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Download Button */}
-                <button className="p-3 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:text-emerald-300 rounded-lg transition-all group/btn">
-                  <Download className="w-5 h-5 group-hover/btn:translate-y-0.5 transition-transform" />
-                </button>
-              </div>
-
-              {/* Hash and Timestamp for Authenticity */}
-              <div className="pt-3 border-t border-gray-700/40">
-                <div className="flex items-center gap-2 text-xs text-gray-600 font-mono">
-                  <Lock className="w-3 h-3" />
-                  <span>Hash: a7f3d2c8b1e9f4d5a2c6b8e3d7f1a4c9</span>
-                  <span className="text-gray-700">|</span>
-                  <span>Verified: {file.uploadDate} {file.uploadTime}</span>
-                </div>
-              </div>
+        {loading ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+            <p className="text-gray-500 font-mono text-sm">Loading evidence files...</p>
+          </div>
+        ) : filteredEvidenceFiles.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-lg border border-emerald-500/20">
+              <FolderOpen className="w-12 h-12 text-gray-600" />
             </div>
-          ))}
-        </div>
+            <p className="text-gray-500 font-mono text-sm">No evidence files found</p>
+            <p className="text-gray-600 text-xs font-mono">Upload evidence to see it listed here</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredEvidenceFiles.map((file) => (
+              <div
+                key={file.id}
+                className="p-5 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/30 rounded-lg hover:border-emerald-500/60 transition-all group"
+              >
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <FileText className="w-5 h-5 text-emerald-400" />
+                      <h4 className="text-gray-100 font-mono">{file.filename}</h4>
+                      <span
+                        className={`px-2 py-1 text-xs rounded font-mono ${
+                          file.riskLevel === "high"
+                            ? "bg-orange-950/40 border border-orange-500/30 text-orange-400"
+                            : file.riskLevel === "medium"
+                            ? "bg-yellow-950/40 border border-yellow-500/30 text-yellow-400"
+                            : "bg-green-950/40 border border-green-500/30 text-green-400"
+                        }`}
+                      >
+                        {file.riskLevel.toUpperCase()} RISK
+                      </span>
+                      <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
+                        {file.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-400 font-mono mb-3">Wallet: {file.walletId}</p>
+
+                    {/* Tags */}
+                    {file.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {file.tags.map((tag: string, index: number) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-gray-800/60 border border-gray-700/40 text-gray-400 text-xs rounded font-mono"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Metadata */}
+                    <div className="flex flex-wrap gap-4 text-xs text-gray-500 font-mono">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {file.uploadDate}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {file.uploadTime}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        Hash: {file.hash ? `${file.hash.substring(0, 10)}...` : "N/A"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Download Button (placeholder – no storage yet) */}
+                  <button className="p-3 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:text-emerald-300 rounded-lg transition-all group/btn">
+                    <Download className="w-5 h-5 group-hover/btn:translate-y-0.5 transition-transform" />
+                  </button>
+                </div>
+
+                {/* Hash and Timestamp for Authenticity */}
+                <div className="pt-3 border-t border-gray-700/40">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 font-mono">
+                    <Lock className="w-3 h-3" />
+                    <span>
+                      Hash: {file.hash ? file.hash : "N/A"}
+                    </span>
+                    <span className="text-gray-700">|</span>
+                    <span>
+                      Recorded: {file.uploadDate} {file.uploadTime}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+function WatchlistSection() {
+  const [watchlist, setWatchlist] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState("");
+  const [label, setLabel] = useState("");
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState<number | null>(null);
+
+  const fetchWatchlist = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/v1/watchlist");
+      if (res.ok) {
+        const data = await res.json();
+        setWatchlist(data);
+      }
+    } catch (e) {
+      console.error("Error fetching watchlist", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWatchlist();
+  }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walletAddress.trim()) return;
+    try {
+      const params = new URLSearchParams();
+      params.append("wallet_address", walletAddress.trim());
+      if (label.trim()) params.append("label", label.trim());
+      const res = await fetch(
+        `http://localhost:3000/api/v1/watchlist?${params.toString()}`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        setWalletAddress("");
+        setLabel("");
+        fetchWatchlist();
+      }
+    } catch (e) {
+      console.error("Error adding to watchlist", e);
+    }
+  };
+
+  const handleRemove = async (id: number) => {
+    try {
+      const res = await fetch(
+        `http://localhost:3000/api/v1/watchlist/${id}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setWatchlist((prev) => prev.filter((w) => w.id !== id));
+      }
+    } catch (e) {
+      console.error("Error removing from watchlist", e);
+    }
+  };
+
+  const handleAnalyzeOne = async (id: number) => {
+    try {
+      setAnalyzingId(id);
+      const res = await fetch(
+        `http://localhost:3000/api/v1/watchlist/${id}/analyze`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setWatchlist((prev) =>
+          prev.map((w) => (w.id === id ? { ...w, ...updated } : w))
+        );
+      }
+    } catch (e) {
+      console.error("Error analyzing watchlist wallet", e);
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
+  const handleBatchAnalyze = async () => {
+    try {
+      setBatchLoading(true);
+      const res = await fetch(
+        "http://localhost:3000/api/v1/watchlist/batch-analyze",
+        { method: "POST" }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        // Merge updated monitoring info back into list
+        const byId: Record<number, any> = {};
+        for (const item of data.items ?? []) {
+          byId[item.id] = item;
+        }
+        setWatchlist((prev) =>
+          prev.map((w) =>
+            byId[w.id] ? { ...w, ...byId[w.id] } : w
+          )
+        );
+      }
+    } catch (e) {
+      console.error("Error batch analyzing watchlist", e);
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "—";
+    try {
+      const d = new Date(value);
+      return d.toLocaleString("en-US", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return value;
+    }
+  };
+
+  return (
+    <div className="max-w-6xl space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-lg border border-emerald-500/30">
+            <Shield className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-lg text-emerald-400 font-mono">Watchlist & Monitoring</h3>
+            <p className="text-xs text-gray-500 font-mono">Track and monitor high-risk wallets continuously</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <Shield className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">Save to Watchlist</p>
+              <p className="text-xs text-gray-400 font-mono">Add high-risk wallets for quick re-analysis</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <RefreshCw className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm text-cyan-400 font-mono mb-1">Batch Analysis</p>
+              <p className="text-xs text-gray-400 font-mono">Run analysis on all wallets to generate reports</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <Activity className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-400 font-mono mb-1">Real-time Status</p>
+              <p className="text-xs text-gray-400 font-mono">View latest risk scores and check times</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add to Watchlist */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-lg text-emerald-400 font-mono">Watchlist & Monitoring</h3>
+            <span className="px-2 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded font-mono">
+              {watchlist.length} wallets
+            </span>
+          </div>
+          <Button
+            onClick={handleBatchAnalyze}
+            disabled={batchLoading || watchlist.length === 0}
+            className="h-9 px-4 bg-gradient-to-r from-emerald-600 to-cyan-600 border border-emerald-500/60 text-white font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {batchLoading ? "Analyzing All..." : "Batch Analyze All"}
+          </Button>
+        </div>
+
+        <form onSubmit={handleAdd} className="flex flex-wrap gap-3 items-center mt-4">
+          <Input
+            placeholder="Wallet address to watch..."
+            value={walletAddress}
+            onChange={(e) => setWalletAddress(e.target.value)}
+            className="flex-1 min-w-[220px] bg-black/60 border-emerald-500/40 text-gray-100 placeholder:text-gray-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 font-mono text-sm"
+          />
+          <Input
+            placeholder="Label (optional)"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className="w-40 bg-black/60 border-emerald-500/40 text-gray-100 placeholder:text-gray-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 font-mono text-sm"
+          />
+          <Button
+            type="submit"
+            disabled={!walletAddress.trim()}
+            className="h-9 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Add to Watchlist
+          </Button>
+        </form>
+      </div>
+
+      {/* Watchlist Table */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
+        {loading ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+            <p className="text-gray-500 font-mono text-sm">Loading watchlist...</p>
+          </div>
+        ) : watchlist.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-lg border border-emerald-500/30">
+              <Shield className="w-10 h-10 text-gray-600" />
+            </div>
+            <p className="text-gray-500 font-mono text-sm">No wallets in watchlist yet.</p>
+            <p className="text-gray-600 text-xs font-mono">Add a wallet above to start monitoring.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm font-mono">
+              <thead>
+                <tr className="border-b border-emerald-500/30">
+                  <th className="text-left py-3 px-4 text-emerald-400 text-xs">Wallet</th>
+                  <th className="text-left py-3 px-4 text-emerald-400 text-xs">Label</th>
+                  <th className="text-left py-3 px-4 text-emerald-400 text-xs">Last Risk</th>
+                  <th className="text-left py-3 px-4 text-emerald-400 text-xs">Last Checked</th>
+                  <th className="text-left py-3 px-4 text-emerald-400 text-xs">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlist.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b border-emerald-500/10 hover:bg-emerald-950/10 transition-colors"
+                  >
+                    <td className="py-3 px-4 text-gray-200 break-all max-w-xs">
+                      {item.wallet_address}
+                    </td>
+                    <td className="py-3 px-4 text-gray-400">
+                      {item.label || <span className="text-gray-600 text-xs">—</span>}
+                    </td>
+                    <td className="py-3 px-4">
+                      {item.last_risk_score != null ? (
+                        <span className="px-2 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded">
+                          {(item.last_risk_score * 100).toFixed(0)}%{" "}
+                          <span className="text-gray-500">
+                            ({item.last_risk_level || "N/A"})
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 text-xs">Not analyzed</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-gray-400 text-xs">
+                      {formatDateTime(item.last_checked_at)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => handleAnalyzeOne(item.id)}
+                          disabled={analyzingId === item.id}
+                          className="h-8 px-3 bg-gradient-to-r from-emerald-600 to-cyan-600 border border-emerald-500/40 text-white text-xs"
+                        >
+                          {analyzingId === item.id ? "Analyzing..." : "Analyze"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleRemove(item.id)}
+                          className="h-8 px-3 border-red-500/40 text-red-400 text-xs hover:bg-red-950/40"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function AIAnalysisSection() {
   const [reports, setReports] = useState<any[]>([]);
@@ -782,8 +1436,8 @@ function AIAnalysisSection() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [filters, setFilters] = useState({
     wallet_address: "",
-    risk_level: "",
-    status: "",
+    risk_level: "all",
+    status: "all",
   });
 
   // Fetch reports from MongoDB
@@ -792,8 +1446,8 @@ function AIAnalysisSection() {
     try {
       const params = new URLSearchParams();
       if (filters.wallet_address) params.append("wallet_address", filters.wallet_address);
-      if (filters.risk_level) params.append("risk_level", filters.risk_level);
-      if (filters.status) params.append("status", filters.status);
+      if (filters.risk_level && filters.risk_level !== "all") params.append("risk_level", filters.risk_level);
+      if (filters.status && filters.status !== "all") params.append("status", filters.status);
 
       const response = await fetch(`http://localhost:3000/api/v1/incidents/reports?${params.toString()}`);
       if (response.ok) {
@@ -820,7 +1474,7 @@ function AIAnalysisSection() {
       const response = await fetch(`http://localhost:3000/api/v1/incidents/reports/${reportId}`);
       if (response.ok) {
         const data = await response.json();
-        // Convert MongoDB format to display format
+        // Convert stored format to display format
         const displayData = {
           wallet: data.wallet_address,
           risk_score: data.risk_score,
@@ -829,6 +1483,10 @@ function AIAnalysisSection() {
           summary: data.summary,
           graph_data: data.graph_data,
           timeline: data.timeline,
+          // Prefer top-level transactions, fall back to summary.transactions if present
+          transactions: data.transactions || data.summary?.transactions || [],
+          report_id: reportId,
+          notes: data.notes || [],
           system_conclusion: data.system_conclusion,
         };
         setSelectedReport(displayData);
@@ -842,10 +1500,18 @@ function AIAnalysisSection() {
     try {
       const response = await fetch(
         `http://localhost:3000/api/v1/incidents/reports/${reportId}/status?status=${newStatus}`,
-        { method: "PATCH" }
+        { 
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          }
+        }
       );
       if (response.ok) {
         fetchReports(); // Refresh list
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Error updating status:", errorData);
       }
     } catch (error) {
       console.error("Error updating status:", error);
@@ -916,24 +1582,53 @@ function AIAnalysisSection() {
     <div className="max-w-6xl space-y-6">
       {/* Header Info */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6">
-        <ul className="space-y-3 text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>View all incident reports and analysis history</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Track risk scores, patterns, and case status</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Manage report status and add notes</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-cyan-400 mt-1">•</span>
-            <span>Filter and search through investigation reports</span>
-          </li>
-        </ul>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
+            <Brain className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-lg text-cyan-400 font-mono">AI Analysis History</h3>
+            <p className="text-xs text-gray-500 font-mono">View and manage all incident reports and analysis</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <BarChart3 className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm text-cyan-400 font-mono mb-1">View Reports</p>
+              <p className="text-xs text-gray-400 font-mono">Browse all incident reports and analysis history</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">Track Status</p>
+              <p className="text-xs text-gray-400 font-mono">Monitor risk scores, patterns, and case status</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <FileText className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-400 font-mono mb-1">Manage Reports</p>
+              <p className="text-xs text-gray-400 font-mono">Update report status and add investigator notes</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
+              <Search className="w-4 h-4 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm text-purple-400 font-mono mb-1">Filter & Search</p>
+              <p className="text-xs text-gray-400 font-mono">Search and filter through investigation reports</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters Bar */}
@@ -957,7 +1652,7 @@ function AIAnalysisSection() {
                 <SelectValue placeholder="Risk Level" />
               </SelectTrigger>
               <SelectContent className="bg-gray-900 border-cyan-500/40">
-                <SelectItem value="" className="font-mono">All Levels</SelectItem>
+                <SelectItem value="all" className="font-mono">All Levels</SelectItem>
                 <SelectItem value="VERY HIGH" className="font-mono text-red-400">Very High</SelectItem>
                 <SelectItem value="HIGH" className="font-mono text-orange-400">High</SelectItem>
                 <SelectItem value="MEDIUM" className="font-mono text-yellow-400">Medium</SelectItem>
@@ -970,7 +1665,7 @@ function AIAnalysisSection() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="bg-gray-900 border-cyan-500/40">
-                <SelectItem value="" className="font-mono">All Status</SelectItem>
+                <SelectItem value="all" className="font-mono">All Status</SelectItem>
                 <SelectItem value="investigating" className="font-mono text-yellow-400">Investigating</SelectItem>
                 <SelectItem value="resolved" className="font-mono text-green-400">Resolved</SelectItem>
                 <SelectItem value="closed" className="font-mono text-gray-400">Closed</SelectItem>
@@ -1008,6 +1703,7 @@ function AIAnalysisSection() {
                 <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Risk Assessment</th>
                 <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Detected Patterns</th>
                 <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Status</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Notes</th>
                 <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Created</th>
                 <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Actions</th>
               </tr>
@@ -1049,6 +1745,13 @@ function AIAnalysisSection() {
                           {report.summary.pattern_type}
                         </div>
                       )}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
+                          {report.notes ? report.notes.length : 0} notes
+                        </span>
+                      </div>
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
@@ -1116,12 +1819,21 @@ function AIAnalysisSection() {
   );
 }
 
-function ContactPoliceSection() {
+function ContactPoliceSection({
+  onUseWalletForEvidence,
+}: {
+  onUseWalletForEvidence?: (walletId: string) => void;
+}) {
   const [step, setStep] = useState(1);
   const [walletId, setWalletId] = useState("");
   const [selectedStation, setSelectedStation] = useState<any>(null);
   const [incidentDescription, setIncidentDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
+  const [walletEvidence, setWalletEvidence] = useState<any[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [policeContacts, setPoliceContacts] = useState<any[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [selectedOfficerDesignation, setSelectedOfficerDesignation] = useState<string>("");
 
   // Mock case data based on wallet ID - includes existing evidence files
   const caseData = {
@@ -1168,51 +1880,73 @@ function ContactPoliceSection() {
     ],
   };
 
-  // Mock police stations - multiple options
-  const policeStations = [
-    {
-      id: 1,
-      name: "Faizabad Range - Uttar Pradesh",
-      zone: "Faizabad Range",
-      designation: "DIG",
-      mobile: "94544002",
-      email: "digrfzd@n",
-      telephone: "05278-224, 05278-224",
-      location: "Faizabad, Uttar Pradesh",
-      specialization: "General Law Enforcement",
-    },
-    {
-      id: 2,
-      name: "Cyber Crime Cell - Mumbai",
-      zone: "Mumbai Metropolitan",
-      designation: "SP Cyber Crime",
-      mobile: "9876543210",
-      email: "cybermumbai@police.gov.in",
-      telephone: "022-2263-5678",
-      location: "Mumbai, Maharashtra",
-      specialization: "Cyber Crime & Financial Fraud",
-    },
-    {
-      id: 3,
-      name: "Economic Offences Wing - Delhi",
-      zone: "Delhi NCR",
-      designation: "ACP Economic Offences",
-      mobile: "9988776655",
-      email: "eow.delhi@police.gov.in",
-      telephone: "011-2334-5566",
-      location: "New Delhi, Delhi",
-      specialization: "Economic Crimes & Crypto Fraud",
-    },
-  ];
+  // Load cybercrime contacts JSON
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        const res = await fetch("/cybercrime_contacts.json");
+        if (res.ok) {
+          const data = await res.json();
+          setPoliceContacts(data);
+        }
+      } catch (e) {
+        console.error("Error loading police contacts", e);
+      } finally {
+        setContactsLoading(false);
+      }
+    };
+    loadContacts();
+  }, []);
 
-  const handleSubmitWallet = () => {
-    if (walletId.trim()) {
-      setStep(2);
+  const fetchWalletEvidence = async (walletAddress: string) => {
+    setEvidenceLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/v1/evidence/");
+      if (res.ok) {
+        const data = await res.json();
+        const filtered = (data as any[]).filter((item) => {
+          const desc = (item.description || "") as string;
+          // Look for line starting with "Wallet:" that matches this wallet
+          const lines = desc.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("Wallet:")) {
+              const value = line.replace("Wallet:", "").trim();
+              if (value.toLowerCase() === walletAddress.toLowerCase()) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+        setWalletEvidence(filtered);
+      } else {
+        setWalletEvidence([]);
+      }
+    } catch (e) {
+      console.error("Error fetching wallet evidence", e);
+      setWalletEvidence([]);
+    } finally {
+      setEvidenceLoading(false);
     }
   };
 
-  const handleSelectStation = (station: any) => {
-    setSelectedStation(station);
+  const handleSubmitWallet = () => {
+    const trimmed = walletId.trim();
+    if (trimmed) {
+      setStep(2);
+      fetchWalletEvidence(trimmed);
+      onUseWalletForEvidence?.(trimmed);
+    }
+  };
+
+  const handleSelectOfficer = (designation: string) => {
+    setSelectedOfficerDesignation(designation);
+    const officer = policeContacts.find(
+      (contact) => contact["Officer/Designation"] === designation
+    );
+    if (officer) {
+      setSelectedStation(officer);
+    }
   };
 
   const handleContinueToReport = () => {
@@ -1339,55 +2073,86 @@ function ContactPoliceSection() {
                 <FolderOpen className="w-5 h-5" />
                 Evidence Files Present in Wallet Address
                 <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
-                  {caseData.evidenceFiles.length} files
+                  {walletEvidence.length} files
                 </span>
               </h4>
-              <div className="space-y-3">
-                {caseData.evidenceFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/30 rounded-lg hover:border-emerald-500/50 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <FileText className="w-5 h-5 text-emerald-400 mt-1" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className="text-gray-100 font-mono text-sm">📄 {file.filename}</p>
-                            <span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded font-mono">
-                              {file.evidenceType}
-                            </span>
+
+              {evidenceLoading ? (
+                <div className="py-8 flex flex-col items-center gap-3">
+                  <div className="w-6 h-6 border-2 border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
+                  <p className="text-gray-500 text-xs font-mono">
+                    Loading evidence files for this wallet...
+                  </p>
+                </div>
+              ) : walletEvidence.length === 0 ? (
+                <div className="py-8 flex flex-col items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-lg border border-emerald-500/30">
+                    <FolderOpen className="w-6 h-6 text-gray-600" />
+                  </div>
+                  <p className="text-gray-500 text-xs font-mono">
+                    No evidence files found for this wallet ID.
+                  </p>
+                  <p className="text-gray-600 text-[11px] font-mono">
+                    Upload evidence in the Evidence Upload section using the same wallet ID to see it here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {walletEvidence.map((item) => {
+                    const createdAt = item.created_at ? new Date(item.created_at) : null;
+                    const uploadDate = createdAt
+                      ? createdAt.toLocaleDateString("en-GB")
+                      : "—";
+                    const uploadTime = createdAt
+                      ? createdAt.toLocaleTimeString("en-GB", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })
+                      : "—";
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/30 rounded-lg hover:border-emerald-500/50 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3 flex-1">
+                            <FileText className="w-5 h-5 text-emerald-400 mt-1" />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-gray-100 font-mono text-sm">
+                                  📄 {item.title || item.evidence_id || "Evidence file"}
+                                </p>
+                              </div>
+                              <p className="text-gray-500 text-xs font-mono mb-2 line-clamp-2">
+                                {item.description || "No description provided."}
+                              </p>
+                              <div className="flex items-center gap-3 text-xs text-gray-600 font-mono">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {uploadDate}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {uploadTime}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-gray-500 text-xs font-mono mb-2">
-                            {file.fileSize} • Uploaded by {file.uploadedBy}
-                          </p>
-                          <div className="flex items-center gap-3 text-xs text-gray-600 font-mono">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {file.uploadDate}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {file.uploadTime}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <button className="p-2 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 rounded transition-all text-[11px] font-mono">
+                              View
+                            </button>
                           </div>
                         </div>
+                        <div className="mt-2 pt-2 border-t border-emerald-500/20 text-[11px] text-gray-500 font-mono">
+                          Hash: {item.hash || "N/A"}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button className="p-2 bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:text-emerald-300 rounded transition-all">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button className="p-2 bg-cyan-950/40 border border-cyan-500/30 hover:border-cyan-500/60 text-cyan-400 hover:text-cyan-300 rounded transition-all">
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-gray-500 text-xs font-mono mt-3 italic">
-                ✓ All evidence files from this wallet address will be automatically attached to the police report.
-              </p>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1408,58 +2173,114 @@ function ContactPoliceSection() {
           <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
             <h3 className="text-lg text-emerald-400 font-mono mb-4">Step 3: Police Station Selection</h3>
             <div className="space-y-4">
-              <Label className="text-gray-300 font-mono mb-3 block">Select Police Station</Label>
-              {policeStations.map((station) => (
-                <div
-                  key={station.id}
-                  onClick={() => handleSelectStation(station)}
-                  className={`p-5 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border rounded-lg transition-all cursor-pointer ${
-                    selectedStation?.id === station.id
-                      ? "border-emerald-500/80 shadow-lg shadow-emerald-500/20"
-                      : "border-emerald-500/30 hover:border-emerald-500/60"
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <h4 className="text-gray-100 font-mono">{station.name}</h4>
-                    {selectedStation?.id === station.id && (
-                      <span className="px-3 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded font-mono flex items-center gap-1">
-                        <Check className="w-3 h-3" />
-                        Selected Station
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">Zone/Range/District:</p>
-                      <p className="text-gray-300 font-mono">{station.zone}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">Designation:</p>
-                      <p className="text-gray-300 font-mono">{station.designation}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">Mobile No.:</p>
-                      <p className="text-gray-300 font-mono">{station.mobile}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">E-Mail:</p>
-                      <p className="text-gray-300 font-mono">{station.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">Telephone:</p>
-                      <p className="text-gray-300 font-mono">{station.telephone}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 font-mono text-xs">Location:</p>
-                      <p className="text-gray-300 font-mono">{station.location}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-gray-500 font-mono text-xs">Specialization:</p>
-                      <p className="text-gray-300 font-mono">{station.specialization}</p>
-                    </div>
-                  </div>
+              <Label className="text-gray-300 font-mono mb-3 block">Select Officer/Designation</Label>
+              
+              {contactsLoading ? (
+                <div className="py-8 flex flex-col items-center gap-3">
+                  <div className="w-6 h-6 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                  <p className="text-gray-500 font-mono text-sm">Loading police contacts...</p>
                 </div>
-              ))}
+              ) : (
+                <>
+                  <Select
+                    value={selectedOfficerDesignation}
+                    onValueChange={handleSelectOfficer}
+                  >
+                    <SelectTrigger className="w-full bg-black/60 border-emerald-500/40 text-gray-100 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all font-mono">
+                      <SelectValue placeholder="Select an Officer/Designation..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-emerald-500/40 max-h-[300px]">
+                      {policeContacts.map((contact, index) => (
+                        <SelectItem
+                          key={index}
+                          value={contact["Officer/Designation"]}
+                          className="font-mono text-gray-300 focus:bg-emerald-950/40 cursor-pointer"
+                        >
+                          {contact["Officer/Designation"]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Display selected officer details */}
+                  {selectedStation && (
+                    <div className="mt-6 p-5 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/50 rounded-lg">
+                      <div className="flex items-start justify-between mb-4">
+                        <h4 className="text-gray-100 font-mono text-lg">
+                          {selectedStation["Officer/Designation"]}
+                        </h4>
+                        <span className="px-3 py-1 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs rounded font-mono flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Selected
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {selectedStation["Address"] && (
+                          <div>
+                            <p className="text-gray-500 font-mono text-xs mb-1">Address:</p>
+                            <p className="text-gray-300 font-mono text-sm">{selectedStation["Address"]}</p>
+                          </div>
+                        )}
+                        
+                        {selectedStation["Email"] && selectedStation["Email"].length > 0 && (
+                          <div>
+                            <p className="text-gray-500 font-mono text-xs mb-1">Email:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedStation["Email"].map((email: string, idx: number) => (
+                                <a
+                                  key={idx}
+                                  href={`mailto:${email}`}
+                                  className="text-cyan-400 hover:text-cyan-300 font-mono text-sm underline"
+                                >
+                                  {email}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {selectedStation["Mobile"] && selectedStation["Mobile"].length > 0 && (
+                          <div>
+                            <p className="text-gray-500 font-mono text-xs mb-1">Mobile:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedStation["Mobile"].map((mobile: string, idx: number) => (
+                                <a
+                                  key={idx}
+                                  href={`tel:${mobile}`}
+                                  className="text-emerald-400 hover:text-emerald-300 font-mono text-sm"
+                                >
+                                  {mobile}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {selectedStation["Telephone"] && selectedStation["Telephone"].length > 0 && (
+                          <div>
+                            <p className="text-gray-500 font-mono text-xs mb-1">Telephone:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedStation["Telephone"].map((tel: string, idx: number) => (
+                                <span key={idx} className="text-gray-300 font-mono text-sm">
+                                  {tel}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {selectedStation["Regional Office"] && (
+                          <div>
+                            <p className="text-gray-500 font-mono text-xs mb-1">Regional Office:</p>
+                            <p className="text-gray-300 font-mono text-sm">{selectedStation["Regional Office"]}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -1486,8 +2307,10 @@ function ContactPoliceSection() {
               <Phone className="w-4 h-4 text-emerald-400" />
               <span className="text-emerald-400 font-mono text-sm">Reporting to:</span>
             </div>
-            <p className="text-gray-100 font-mono">{selectedStation.name}</p>
-            <p className="text-gray-500 font-mono text-xs mt-1">{selectedStation.location}</p>
+            <p className="text-gray-100 font-mono">{selectedStation["Officer/Designation"]}</p>
+            {selectedStation["Address"] && (
+              <p className="text-gray-500 font-mono text-xs mt-1">{selectedStation["Address"]}</p>
+            )}
           </div>
 
           {/* Summary Cards */}
@@ -1542,15 +2365,1362 @@ function ContactPoliceSection() {
 
             <Button
               type="button"
-              disabled={!incidentDescription.trim()}
+              disabled={!incidentDescription.trim() || !selectedStation}
+              onClick={async () => {
+                if (!selectedStation || !incidentDescription.trim()) return;
+                try {
+                  // Auto-detect location
+                  let locationData = {
+                    city: null as string | null,
+                    country: null as string | null,
+                    lat: null as number | null,
+                    lng: null as number | null,
+                    ip: null as string | null,
+                  };
+
+                  try {
+                    // Get IP address
+                    const ipRes = await fetch("https://api.ipify.org?format=json");
+                    if (ipRes.ok) {
+                      const ipData = await ipRes.json();
+                      locationData.ip = ipData.ip;
+
+                      // Get location from IP
+                      const locationRes = await fetch(`http://ip-api.com/json/${locationData.ip}`);
+                      if (locationRes.ok) {
+                        const locData = await locationRes.json();
+                        if (locData.status === "success") {
+                          locationData.city = locData.city || null;
+                          locationData.country = locData.country || null;
+                          locationData.lat = locData.lat || null;
+                          locationData.lng = locData.lon || null;
+                        }
+                      }
+                    }
+                  } catch (locError) {
+                    console.error("Error detecting location:", locError);
+                    // Continue without location data
+                  }
+
+                  const evidenceIds = walletEvidence.map((e) => e.id);
+                  const response = await fetch("http://localhost:3000/api/v1/complaints/", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      wallet_address: walletId,
+                      officer_designation: selectedStation["Officer/Designation"],
+                      officer_address: selectedStation["Address"] || null,
+                      officer_email: selectedStation["Email"] || [],
+                      officer_mobile: selectedStation["Mobile"] || [],
+                      officer_telephone: selectedStation["Telephone"] || [],
+                      incident_description: incidentDescription,
+                      internal_notes: internalNotes || null,
+                      evidence_ids: evidenceIds,
+                      investigator_location_city: locationData.city,
+                      investigator_location_country: locationData.country,
+                      investigator_location_latitude: locationData.lat,
+                      investigator_location_longitude: locationData.lng,
+                      investigator_location_ip: locationData.ip,
+                    }),
+                  });
+                  if (response.ok) {
+                    // Reset form and go back to step 1
+                    setStep(1);
+                    setWalletId("");
+                    setSelectedStation(null);
+                    setSelectedOfficerDesignation("");
+                    setIncidentDescription("");
+                    setInternalNotes("");
+                    setWalletEvidence([]);
+                    alert("Complaint submitted successfully!");
+                  } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(`Failed to submit complaint: ${errorData.detail || "Unknown error"}`);
+                  }
+                } catch (error) {
+                  console.error("Error submitting complaint", error);
+                  alert("Failed to submit complaint. Please try again.");
+                }
+              }}
               className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-600 via-cyan-600 to-emerald-600 hover:from-emerald-500 hover:via-cyan-500 hover:to-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all duration-300 h-12 group/btn border border-emerald-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="flex items-center justify-center gap-2 font-mono">
                 <PhoneCall className="w-5 h-5" />
-                Submit Report to Police
+                Submit Wallet Complaint
               </span>
             </Button>
           </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComplaintHistorySection() {
+  const [complaints, setComplaints] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
+  const [filters, setFilters] = useState({
+    wallet_address: "",
+    status: "all",
+  });
+
+  const fetchComplaints = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:3000/api/v1/complaints/");
+      if (response.ok) {
+        const data = await response.json();
+        setComplaints(data);
+      }
+    } catch (error) {
+      console.error("Error fetching complaints:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchComplaints();
+  }, []);
+
+  const handleViewComplaint = (complaint: any) => {
+    setSelectedComplaint(complaint);
+  };
+
+  const handleStatusUpdate = async (complaintId: number, newStatus: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/v1/complaints/${complaintId}/status?status=${newStatus}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response.ok) {
+        fetchComplaints();
+        if (selectedComplaint && selectedComplaint.id === complaintId) {
+          setSelectedComplaint({ ...selectedComplaint, status: newStatus });
+        }
+      }
+    } catch (error) {
+      console.error("Error updating complaint status:", error);
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "submitted":
+        return "bg-blue-500/20 text-blue-400 border-blue-500/40";
+      case "under_review":
+        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/40";
+      case "resolved":
+        return "bg-green-500/20 text-green-400 border-green-500/40";
+      case "closed":
+        return "bg-gray-500/20 text-gray-400 border-gray-500/40";
+      default:
+        return "bg-gray-500/20 text-gray-400 border-gray-500/40";
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
+
+  const filteredComplaints = complaints.filter((complaint) => {
+    const matchesWallet =
+      !filters.wallet_address ||
+      complaint.wallet_address.toLowerCase().includes(filters.wallet_address.toLowerCase());
+    const matchesStatus = filters.status === "all" || complaint.status === filters.status;
+    return matchesWallet && matchesStatus;
+  });
+
+  // If a complaint is selected, show the full details
+  if (selectedComplaint) {
+    return (
+      <div className="max-w-6xl space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl text-cyan-400 font-mono">Complaint Details</h2>
+          <Button
+            onClick={() => setSelectedComplaint(null)}
+            className="bg-gray-800 border border-gray-600 text-gray-300 hover:text-white font-mono text-sm"
+          >
+            Back to List
+          </Button>
+        </div>
+
+        <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6 space-y-6">
+          {/* Header Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40 border border-emerald-500/30 rounded-lg">
+              <p className="text-gray-500 text-xs font-mono mb-1">Complaint ID</p>
+              <p className="text-emerald-400 font-mono text-sm">#{selectedComplaint.id}</p>
+            </div>
+            <div className="p-4 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40 border border-emerald-500/30 rounded-lg">
+              <p className="text-gray-500 text-xs font-mono mb-1">Status</p>
+              <Select
+                value={selectedComplaint.status || "submitted"}
+                onValueChange={(value) => handleStatusUpdate(selectedComplaint.id, value)}
+              >
+                <SelectTrigger
+                  className={`w-full text-xs font-mono border ${getStatusBadgeColor(
+                    selectedComplaint.status || "submitted"
+                  )}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-cyan-500/40">
+                  <SelectItem value="submitted" className="font-mono text-blue-400">
+                    Submitted
+                  </SelectItem>
+                  <SelectItem value="under_review" className="font-mono text-yellow-400">
+                    Under Review
+                  </SelectItem>
+                  <SelectItem value="resolved" className="font-mono text-green-400">
+                    Resolved
+                  </SelectItem>
+                  <SelectItem value="closed" className="font-mono text-gray-400">
+                    Closed
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Wallet Address */}
+          <div>
+            <p className="text-gray-500 text-xs font-mono mb-2">Wallet Address</p>
+            <p className="text-gray-100 font-mono text-sm break-all bg-black/40 p-3 rounded border border-emerald-500/30">
+              {selectedComplaint.wallet_address}
+            </p>
+          </div>
+
+          {/* Officer Details */}
+          <div>
+            <p className="text-gray-500 text-xs font-mono mb-2">Officer/Designation</p>
+            <p className="text-cyan-400 font-mono text-sm mb-3">{selectedComplaint.officer_designation}</p>
+            {selectedComplaint.officer_address && (
+              <div className="mb-2">
+                <p className="text-gray-500 text-xs font-mono mb-1">Address</p>
+                <p className="text-gray-300 font-mono text-sm">{selectedComplaint.officer_address}</p>
+              </div>
+            )}
+            {selectedComplaint.officer_email && selectedComplaint.officer_email.length > 0 && (
+              <div className="mb-2">
+                <p className="text-gray-500 text-xs font-mono mb-1">Email</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedComplaint.officer_email.map((email: string, idx: number) => (
+                    <a
+                      key={idx}
+                      href={`mailto:${email}`}
+                      className="text-cyan-400 hover:text-cyan-300 font-mono text-sm underline"
+                    >
+                      {email}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedComplaint.officer_mobile && selectedComplaint.officer_mobile.length > 0 && (
+              <div className="mb-2">
+                <p className="text-gray-500 text-xs font-mono mb-1">Mobile</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedComplaint.officer_mobile.map((mobile: string, idx: number) => (
+                    <a
+                      key={idx}
+                      href={`tel:${mobile}`}
+                      className="text-emerald-400 hover:text-emerald-300 font-mono text-sm"
+                    >
+                      {mobile}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedComplaint.officer_telephone && selectedComplaint.officer_telephone.length > 0 && (
+              <div className="mb-2">
+                <p className="text-gray-500 text-xs font-mono mb-1">Telephone</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedComplaint.officer_telephone.map((tel: string, idx: number) => (
+                    <span key={idx} className="text-gray-300 font-mono text-sm">
+                      {tel}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Incident Description */}
+          <div>
+            <p className="text-gray-500 text-xs font-mono mb-2">Incident Description</p>
+            <p className="text-gray-300 font-mono text-sm bg-black/40 p-3 rounded border border-emerald-500/30 whitespace-pre-wrap">
+              {selectedComplaint.incident_description}
+            </p>
+          </div>
+
+          {/* Internal Notes */}
+          {selectedComplaint.internal_notes && (
+            <div>
+              <p className="text-gray-500 text-xs font-mono mb-2">Internal Notes</p>
+              <p className="text-gray-400 font-mono text-sm bg-black/40 p-3 rounded border border-gray-500/30 whitespace-pre-wrap">
+                {selectedComplaint.internal_notes}
+              </p>
+            </div>
+          )}
+
+          {/* Evidence Count */}
+          {selectedComplaint.evidence_ids && selectedComplaint.evidence_ids.length > 0 && (
+            <div>
+              <p className="text-gray-500 text-xs font-mono mb-2">Attached Evidence</p>
+              <p className="text-cyan-400 font-mono text-sm">
+                {selectedComplaint.evidence_ids.length} file(s) attached
+              </p>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700/40">
+            <div>
+              <p className="text-gray-500 text-xs font-mono mb-1">Created</p>
+              <p className="text-gray-300 font-mono text-sm">{formatDate(selectedComplaint.created_at)}</p>
+              <p className="text-gray-500 font-mono text-xs">{formatTime(selectedComplaint.created_at)}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs font-mono mb-1">Last Updated</p>
+              <p className="text-gray-300 font-mono text-sm">{formatDate(selectedComplaint.updated_at)}</p>
+              <p className="text-gray-500 font-mono text-xs">{formatTime(selectedComplaint.updated_at)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl space-y-6">
+      {/* Header Info */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
+            <Clipboard className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-lg text-cyan-400 font-mono">Complaint History</h3>
+            <p className="text-xs text-gray-500 font-mono">Manage and track all filed complaints</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <FileText className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm text-cyan-400 font-mono mb-1">View All Complaints</p>
+              <p className="text-xs text-gray-400 font-mono">Browse all filed wallet complaints in one place</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-400 font-mono mb-1">Track Status</p>
+              <p className="text-xs text-gray-400 font-mono">Monitor complaint status and updates in real-time</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
+            <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <Eye className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-400 font-mono mb-1">Access Details</p>
+              <p className="text-xs text-gray-400 font-mono">View full complaint details and officer information</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-cyan-400" />
+            <span className="text-sm text-cyan-400 font-mono">Filters</span>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <Input
+              placeholder="Search wallet address..."
+              value={filters.wallet_address}
+              onChange={(e) => setFilters({ ...filters, wallet_address: e.target.value })}
+              className="w-48 bg-black/60 border-cyan-500/40 text-gray-100 placeholder:text-gray-600 focus:border-cyan-400 font-mono text-sm"
+            />
+
+            <Select
+              value={filters.status}
+              onValueChange={(value) => setFilters({ ...filters, status: value })}
+            >
+              <SelectTrigger className="w-40 bg-black/60 border-cyan-500/40 text-gray-100 font-mono text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-900 border-cyan-500/40">
+                <SelectItem value="all" className="font-mono">All Status</SelectItem>
+                <SelectItem value="submitted" className="font-mono text-blue-400">Submitted</SelectItem>
+                <SelectItem value="under_review" className="font-mono text-yellow-400">Under Review</SelectItem>
+                <SelectItem value="resolved" className="font-mono text-green-400">Resolved</SelectItem>
+                <SelectItem value="closed" className="font-mono text-gray-400">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              onClick={fetchComplaints}
+              className="flex items-center gap-2 bg-gradient-to-r from-cyan-950/40 to-emerald-950/40 border border-cyan-500/30 hover:border-cyan-500/60 text-cyan-400 hover:text-cyan-300 font-mono text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Complaints Table */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Clipboard className="w-5 h-5 text-cyan-400" />
+          <h3 className="text-lg text-cyan-400 font-mono">Filed Complaints</h3>
+          <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
+            {filteredComplaints.length} {filteredComplaints.length === 1 ? "complaint" : "complaints"}
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-cyan-500/30">
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Complaint ID</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Wallet Address</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Officer/Designation</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Status</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Created</th>
+                <th className="text-left py-3 px-4 text-sm text-cyan-400 font-mono">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                      <p className="text-gray-500 font-mono text-sm">Loading complaints...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredComplaints.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-emerald-500/10 rounded-lg border border-cyan-500/20">
+                        <Clipboard className="w-12 h-12 text-gray-600" />
+                      </div>
+                      <p className="text-gray-500 font-mono text-sm">No complaints found</p>
+                      <p className="text-gray-600 text-xs font-mono">File a complaint to see it here</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredComplaints.map((complaint) => (
+                  <tr
+                    key={complaint.id}
+                    className="border-b border-cyan-500/10 hover:bg-cyan-950/10 transition-colors"
+                  >
+                    <td className="py-4 px-4">
+                      <span className="text-emerald-400 font-mono text-sm">#{complaint.id}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="font-mono text-sm text-gray-300 break-all max-w-xs">
+                        {complaint.wallet_address}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="font-mono text-sm text-gray-300 max-w-xs truncate">
+                        {complaint.officer_designation}
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span
+                        className={`px-2 py-1 rounded font-mono text-xs border ${getStatusBadgeColor(
+                          complaint.status || "submitted"
+                        )}`}
+                      >
+                        {complaint.status || "submitted"}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-sm text-gray-400 font-mono">{formatDate(complaint.created_at)}</div>
+                      <div className="text-xs text-gray-600 font-mono">{formatTime(complaint.created_at)}</div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Button
+                        onClick={() => handleViewComplaint(complaint)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-cyan-950/40 to-emerald-950/40 border border-cyan-500/30 hover:border-cyan-500/60 text-cyan-400 hover:text-cyan-300 rounded transition-all font-mono text-xs"
+                      >
+                        View Details
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordSection() {
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{success: boolean; message: string} | null>(null);
+  const [investigatorEmail, setInvestigatorEmail] = useState<string>("");
+
+  useEffect(() => {
+    // Get logged-in investigator email from localStorage
+    const email = localStorage.getItem("investigator_email") || localStorage.getItem("admin_email") || "";
+    setInvestigatorEmail(email);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResult(null);
+
+    // Validation
+    if (!investigatorEmail || !oldPassword || !newPassword || !confirmPassword) {
+      setResult({
+        success: false,
+        message: "Please fill in all fields"
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResult({
+        success: false,
+        message: "New password and confirm password do not match"
+      });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setResult({
+        success: false,
+        message: "New password must be at least 8 characters long"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:3000/api/v1/investigators/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: investigatorEmail.trim(),
+          old_password: oldPassword,
+          new_password: newPassword,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setResult({
+          success: true,
+          message: "Password reset successfully! Please login again with your new password."
+        });
+        // Clear form
+        setOldPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        setResult({
+          success: false,
+          message: data.detail || data.message || "Failed to reset password"
+        });
+      }
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      setResult({
+        success: false,
+        message: "Error connecting to server. Please try again."
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+            Reset Password
+          </h1>
+          <p className="text-gray-500 font-mono text-sm">Change your account password</p>
+        </div>
+      </div>
+
+      {/* Reset Password Form */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/20 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <KeyRound className="w-5 h-5 text-emerald-400" />
+          <h2 className="text-lg text-emerald-400 font-mono">Change Password</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Email (read-only) */}
+          <div>
+            <Label htmlFor="email" className="text-gray-300 font-mono mb-2 block">
+              Email Address
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={investigatorEmail}
+              disabled
+              className="bg-black/60 border-emerald-500/40 text-gray-400 font-mono cursor-not-allowed"
+            />
+          </div>
+
+          {/* Old Password */}
+          <div>
+            <Label htmlFor="oldPassword" className="text-gray-300 font-mono mb-2 block">
+              Current Password
+            </Label>
+            <div className="relative">
+              <Input
+                id="oldPassword"
+                type={showOldPassword ? "text" : "password"}
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="Enter your current password"
+                required
+                className="bg-black/60 border-emerald-500/40 text-gray-100 placeholder:text-gray-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all font-mono pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowOldPassword(!showOldPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-emerald-400 transition"
+              >
+                {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* New Password */}
+          <div>
+            <Label htmlFor="newPassword" className="text-gray-300 font-mono mb-2 block">
+              New Password
+            </Label>
+            <div className="relative">
+              <Input
+                id="newPassword"
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter your new password (min 8 characters)"
+                required
+                minLength={8}
+                className="bg-black/60 border-emerald-500/40 text-gray-100 placeholder:text-gray-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all font-mono pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-emerald-400 transition"
+              >
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Confirm New Password */}
+          <div>
+            <Label htmlFor="confirmPassword" className="text-gray-300 font-mono mb-2 block">
+              Confirm New Password
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your new password"
+                required
+                minLength={8}
+                className="bg-black/60 border-emerald-500/40 text-gray-100 placeholder:text-gray-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all font-mono pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-emerald-400 transition"
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Result Message */}
+          {result && (
+            <div className={`p-4 rounded-lg border ${
+              result.success
+                ? "bg-emerald-950/20 border-emerald-500/30"
+                : "bg-red-950/20 border-red-500/30"
+            }`}>
+              <div className="flex items-start gap-3">
+                {result.success ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-red-400 mt-0.5" />
+                )}
+                <p className={`font-mono text-sm ${
+                  result.success ? "text-emerald-400" : "text-red-400"
+                }`}>
+                  {result.message}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={loading || !investigatorEmail}
+            className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-600 via-cyan-600 to-emerald-600 hover:from-emerald-500 hover:via-cyan-500 hover:to-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all duration-300 h-12 group/btn border border-emerald-400/30 disabled:opacity-50"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
+            {loading ? (
+              <span className="flex items-center justify-center gap-2 font-mono">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                Resetting...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2 font-mono">
+                <KeyRound className="w-4 h-4" />
+                Reset Password
+              </span>
+            )}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function NotificationBell({ 
+  investigatorId, 
+  unreadCount, 
+  onViewMessages 
+}: { 
+  investigatorId: number; 
+  unreadCount: number; 
+  onViewMessages: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [recentMessages, setRecentMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const bellRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen && investigatorId) {
+      fetchRecentMessages();
+      // Calculate dropdown position
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8, // 8px = mt-2 equivalent
+          right: window.innerWidth - rect.right,
+        });
+      }
+    }
+  }, [isOpen, investigatorId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        bellRef.current && 
+        !bellRef.current.contains(target) &&
+        !(target as Element).closest('[class*="z-[9999]"]')
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      // Small delay to prevent immediate close on open
+      setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 0);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const fetchRecentMessages = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/messages?limit=5`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setRecentMessages(Array.isArray(data) ? data : (data.messages || []));
+      }
+    } catch (error) {
+      console.error("Error fetching recent messages:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string | null) => {
+    if (!dateString) return "Just now";
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString();
+    } catch {
+      return "Unknown";
+    }
+  };
+
+  return (
+    <>
+      <div className="relative" ref={bellRef}>
+        <button
+          ref={buttonRef}
+          onClick={() => setIsOpen(!isOpen)}
+          className="relative p-2 text-gray-400 hover:text-purple-400 transition hover:bg-purple-500/10 rounded-lg border border-transparent hover:border-purple-500/30"
+        >
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs text-white font-bold border-2 border-black">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {isOpen && createPortal(
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setIsOpen(false)}
+          />
+          {/* Dropdown */}
+          <div 
+            className="fixed w-80 bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl border border-purple-500/30 rounded-lg shadow-2xl z-[9999] overflow-hidden"
+            style={{
+              top: `${dropdownPosition.top}px`,
+              right: `${dropdownPosition.right}px`,
+            }}
+          >
+          <div className="p-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/30 to-cyan-950/30">
+            <div className="flex items-center justify-between">
+              <h3 className="text-purple-400 font-mono text-sm font-semibold">Notifications</h3>
+              <button
+                onClick={onViewMessages}
+                className="text-xs text-cyan-400 hover:text-cyan-300 font-mono underline"
+              >
+                View All
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-96 overflow-y-auto">
+            {loading ? (
+              <div className="p-8 flex flex-col items-center gap-2">
+                <div className="w-6 h-6 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                <p className="text-gray-500 font-mono text-xs">Loading...</p>
+              </div>
+            ) : recentMessages.length === 0 ? (
+              <div className="p-8 flex flex-col items-center gap-2">
+                <Bell className="w-8 h-8 text-gray-600" />
+                <p className="text-gray-500 font-mono text-sm">No notifications</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-purple-500/10">
+                {recentMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`p-4 hover:bg-purple-500/5 transition cursor-pointer ${
+                      !message.is_read ? "bg-purple-950/10" : ""
+                    }`}
+                    onClick={() => {
+                      onViewMessages();
+                      setIsOpen(false);
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`p-1.5 rounded-lg border ${
+                        message.is_read
+                          ? "bg-purple-500/10 border-purple-500/30"
+                          : "bg-purple-500/20 border-purple-500/40"
+                      }`}>
+                        {message.is_broadcast ? (
+                          <Bell className={`w-3.5 h-3.5 ${message.is_read ? "text-purple-400" : "text-purple-300"}`} />
+                        ) : (
+                          <Mail className={`w-3.5 h-3.5 ${message.is_read ? "text-purple-400" : "text-purple-300"}`} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {!message.is_read && (
+                            <span className="w-1.5 h-1.5 bg-purple-400 rounded-full"></span>
+                          )}
+                          <p className={`text-sm font-mono truncate ${
+                            message.is_read ? "text-gray-300" : "text-purple-300 font-semibold"
+                          }`}>
+                            {message.subject}
+                          </p>
+                        </div>
+                        <p className="text-gray-400 text-xs font-mono line-clamp-2 mb-1">
+                          {message.content}
+                        </p>
+                        <p className="text-gray-600 text-xs font-mono">
+                          {formatTimeAgo(message.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {recentMessages.length > 0 && (
+            <div className="p-3 border-t border-purple-500/20 bg-black/40">
+              <button
+                onClick={() => {
+                  onViewMessages();
+                  setIsOpen(false);
+                }}
+                className="w-full text-center text-xs text-purple-400 hover:text-purple-300 font-mono py-2"
+              >
+                View All Messages →
+              </button>
+            </div>
+          )}
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  );
+}
+
+function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: number; onMarkAsRead: () => void }) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
+  const [filter, setFilter] = useState<"all" | "unread" | "read">("all");
+  const [replying, setReplying] = useState(false);
+  const [replyContent, setReplyContent] = useState("");
+  const [replyPriority, setReplyPriority] = useState("normal");
+
+  useEffect(() => {
+    fetchMessages();
+  }, [investigatorId, filter]);
+
+  const fetchMessages = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/messages?unread_only=${filter === "unread"}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // Backend returns array directly, not wrapped in {messages: []}
+        setMessages(Array.isArray(data) ? data : (data.messages || []));
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkAsRead = async (messageId: number) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/v1/messages/messages/${messageId}/read`,
+        { method: "PATCH" }
+      );
+      if (response.ok) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId ? { ...msg, is_read: true, read_at: new Date().toISOString() } : msg
+          )
+        );
+        onMarkAsRead();
+      }
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+    }
+  };
+
+  const handleReply = async () => {
+    if (!selectedMessage || !replyContent.trim()) {
+      alert("Please enter a reply message");
+      return;
+    }
+
+    setReplying(true);
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/reply?message_id=${selectedMessage.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: replyContent,
+            priority: replyPriority,
+            message_type: "message",
+            subject: `Re: ${selectedMessage.subject}`,
+            is_broadcast: false
+          }),
+        }
+      );
+
+      if (response.ok) {
+        alert("Reply sent successfully!");
+        setReplyContent("");
+        setReplying(false);
+        setSelectedMessage(null);
+        fetchMessages();
+      } else {
+        const error = await response.json();
+        alert(`Failed to send reply: ${error.detail || "Unknown error"}`);
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const filteredMessages = messages.filter((msg) => {
+    if (filter === "unread") return !msg.is_read;
+    if (filter === "read") return msg.is_read;
+    return true;
+  });
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case "urgent":
+        return "text-red-400 bg-red-950/20 border-red-500/30";
+      case "high":
+        return "text-orange-400 bg-orange-950/20 border-orange-500/30";
+      case "normal":
+        return "text-emerald-400 bg-emerald-950/20 border-emerald-500/30";
+      case "low":
+        return "text-gray-400 bg-gray-950/20 border-gray-500/30";
+      default:
+        return "text-gray-400 bg-gray-950/20 border-gray-500/30";
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <div className="max-w-6xl space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/30 rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-purple-500/20 to-cyan-500/20 rounded-lg border border-purple-500/30">
+              <Mail className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="text-lg text-purple-400 font-mono">Messages & Notifications</h3>
+              <p className="text-xs text-gray-500 font-mono">Communications from superadmin</p>
+            </div>
+          </div>
+          <Button
+            onClick={fetchMessages}
+            variant="outline"
+            size="sm"
+            className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/30 rounded-lg p-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-gray-400 font-mono text-sm mr-4">Filter:</span>
+          {(["all", "unread", "read"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-4 py-2 rounded-lg font-mono text-sm transition-all ${
+                filter === f
+                  ? "bg-purple-500/20 border border-purple-500/40 text-purple-400"
+                  : "bg-black/40 border border-gray-700/30 text-gray-400 hover:text-purple-400"
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)} ({f === "all" ? messages.length : f === "unread" ? messages.filter(m => !m.is_read).length : messages.filter(m => m.is_read).length})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Messages List */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/30 rounded-lg p-6">
+        {loading ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+            <p className="text-gray-500 font-mono text-sm">Loading messages...</p>
+          </div>
+        ) : filteredMessages.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <Mail className="w-12 h-12 text-gray-600" />
+            <p className="text-gray-500 font-mono">No messages found</p>
+            <p className="text-xs text-gray-600 font-mono">
+              {filter !== "all" ? "Try changing the filter" : "You have no messages yet"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredMessages.map((message) => (
+              <div
+                key={message.id}
+                className={`p-4 bg-black/40 border rounded-lg hover:border-opacity-60 transition-all cursor-pointer ${
+                  message.is_read
+                    ? "border-purple-500/20 hover:border-purple-500/40"
+                    : "border-purple-500/40 hover:border-purple-500/60 bg-purple-950/10"
+                }`}
+                onClick={() => {
+                  setSelectedMessage(message);
+                  if (!message.is_read) {
+                    handleMarkAsRead(message.id);
+                  }
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg border ${
+                    message.is_read
+                      ? "bg-purple-500/10 border-purple-500/30"
+                      : "bg-purple-500/20 border-purple-500/40"
+                  }`}>
+                    {message.is_broadcast ? (
+                      <Bell className={`w-4 h-4 ${message.is_read ? "text-purple-400" : "text-purple-300"}`} />
+                    ) : (
+                      <Mail className={`w-4 h-4 ${message.is_read ? "text-purple-400" : "text-purple-300"}`} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {!message.is_read && (
+                        <span className="w-2 h-2 bg-purple-400 rounded-full"></span>
+                      )}
+                      <span className={`font-mono text-sm ${message.is_read ? "text-gray-300" : "text-purple-300 font-semibold"}`}>
+                        {message.subject}
+                      </span>
+                      <span className={`px-2 py-0.5 text-xs font-mono rounded border ${getPriorityColor(message.priority)}`}>
+                        {message.priority?.toUpperCase() || "NORMAL"}
+                      </span>
+                      {message.is_broadcast && (
+                        <span className="px-2 py-0.5 text-xs font-mono bg-yellow-950/40 border border-yellow-500/30 rounded text-yellow-400">
+                          BROADCAST
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-400 text-xs font-mono mb-2 line-clamp-2">
+                      {message.content}
+                    </p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-mono">
+                        From: {message.sender_email || "System"}
+                      </span>
+                      <span className="text-gray-600 font-mono">
+                        {formatDate(message.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMessage(message);
+                      if (!message.is_read) {
+                        handleMarkAsRead(message.id);
+                      }
+                    }}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Message Detail Modal */}
+      {selectedMessage && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl border border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gray-900/95 backdrop-blur-xl border-b border-purple-500/30 p-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl text-purple-400 font-mono mb-1">{selectedMessage.subject}</h3>
+                <p className="text-gray-500 font-mono text-sm">
+                  From: {selectedMessage.sender_email || "System"}
+                </p>
+              </div>
+              <Button
+                onClick={() => setSelectedMessage(null)}
+                className="h-8 w-8 p-0 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 text-red-400"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 text-xs font-mono rounded border ${getPriorityColor(selectedMessage.priority)}`}>
+                  {selectedMessage.priority?.toUpperCase() || "NORMAL"}
+                </span>
+                {selectedMessage.is_broadcast && (
+                  <span className="px-3 py-1 text-xs font-mono bg-yellow-950/40 border border-yellow-500/30 rounded text-yellow-400">
+                    BROADCAST MESSAGE
+                  </span>
+                )}
+                <span className="text-gray-500 font-mono text-xs">
+                  {formatDate(selectedMessage.created_at)}
+                </span>
+              </div>
+              <div className="bg-black/40 border border-purple-500/30 rounded-lg p-4">
+                <p className="text-gray-200 font-mono text-sm whitespace-pre-wrap">
+                  {selectedMessage.content}
+                </p>
+              </div>
+              {selectedMessage.read_at && (
+                <div className="text-gray-500 font-mono text-xs">
+                  Read at: {formatDate(selectedMessage.read_at)}
+                </div>
+              )}
+            </div>
+            <div className="sticky bottom-0 bg-gray-900/95 backdrop-blur-xl border-t border-purple-500/30 p-4 space-y-4">
+              {/* Reply Section */}
+              <div className="space-y-2">
+                <label className="text-sm text-purple-400 font-mono">Reply:</label>
+                <Textarea
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  placeholder="Type your reply..."
+                  className="bg-black/40 border-purple-500/30 text-gray-300 font-mono min-h-[100px]"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-400 font-mono">Priority:</label>
+                  <select
+                    value={replyPriority}
+                    onChange={(e) => setReplyPriority(e.target.value)}
+                    className="px-3 py-1 bg-black/40 border border-purple-500/30 rounded text-gray-300 font-mono text-xs"
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  onClick={() => {
+                    setSelectedMessage(null);
+                    setReplyContent("");
+                  }}
+                  variant="outline"
+                  className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={handleReply}
+                  disabled={replying || !replyContent.trim()}
+                  className="bg-purple-600 hover:bg-purple-500 text-white border border-purple-500/30"
+                >
+                  {replying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Send Reply
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

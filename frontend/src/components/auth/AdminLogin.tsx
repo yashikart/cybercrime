@@ -32,13 +32,48 @@ export function AdminLogin({ setCurrentPage }: AdminLoginProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    
+    try {
+      // Normalize email (lowercase, trim)
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Use FormData for OAuth2PasswordRequestForm compatibility
+      const formData = new FormData();
+      formData.append("username", normalizedEmail); // OAuth2 uses "username" field for email
+      formData.append("password", password);
+      
+      const response = await fetch("http://localhost:3000/api/v1/auth/login", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Store token in localStorage
+        localStorage.setItem("admin_token", data.access_token);
+        localStorage.setItem("admin_email", normalizedEmail);
+        // Redirect to admin dashboard
+        setCurrentPage("admin-dashboard");
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || "Login failed. Please check your credentials.";
+        
+        // Show more helpful error message
+        if (errorMessage.includes("not found") || errorMessage.includes("User not found")) {
+          alert(`${errorMessage}\n\nIf you're the superadmin, please initialize your account first:\n1. Go to Manual Investigator section\n2. Click "Initialize Superadmin Account"`);
+        } else {
+          alert(errorMessage);
+        }
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Error connecting to server. Please try again.");
+    } finally {
       setIsLoading(false);
-      setCurrentPage("admin-dashboard");
-    }, 2000);
+    }
   };
 
   return (
@@ -75,12 +110,12 @@ export function AdminLogin({ setCurrentPage }: AdminLoginProps) {
           </div>
 
           <h1 className={`text-5xl mb-3 bg-gradient-to-r from-red-400 via-orange-400 to-red-500 bg-clip-text text-transparent transition-all ${glitchActive ? 'blur-sm' : ''}`}>
-            ADMIN PORTAL
+            SUPERADMIN PORTAL
           </h1>
           <div className="h-1 w-32 mx-auto bg-gradient-to-r from-transparent via-red-400 to-transparent mb-3"></div>
           <p className="text-gray-400 flex items-center justify-center gap-2 font-mono">
             <Shield className="w-4 h-4 text-red-400" />
-            <span>ADMINISTRATOR ACCESS</span>
+            <span>SUPERADMIN ACCESS</span>
           </p>
           <div className="flex items-center justify-center gap-3 mt-2 text-xs text-gray-600">
             <span className="flex items-center gap-1">
@@ -127,7 +162,7 @@ export function AdminLogin({ setCurrentPage }: AdminLoginProps) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-red-400 text-sm font-mono flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse shadow-lg shadow-red-400"></div>
-                    ADMIN AUTHENTICATION
+                    SUPERADMIN AUTHENTICATION
                   </span>
                   <span className="text-orange-400 text-xs font-mono">{scanProgress}%</span>
                 </div>
@@ -158,7 +193,7 @@ export function AdminLogin({ setCurrentPage }: AdminLoginProps) {
                 <div className="space-y-2 group/field">
                   <Label htmlFor="email" className="text-gray-300 flex items-center gap-2 font-mono text-sm">
                     <Mail className="w-4 h-4 text-orange-400" />
-                    ADMIN CREDENTIALS
+                    SUPERADMIN CREDENTIALS
                   </Label>
                   <div className="relative">
                     <Input
@@ -229,7 +264,7 @@ export function AdminLogin({ setCurrentPage }: AdminLoginProps) {
                   ) : (
                     <span className="flex items-center justify-center gap-2 font-mono">
                       <Shield className="w-4 h-4" />
-                      ADMIN ACCESS
+                      SUPERADMIN ACCESS
                       <Terminal className="w-4 h-4" />
                     </span>
                   )}

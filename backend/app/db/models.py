@@ -18,6 +18,17 @@ class User(Base):
     full_name = Column(String)
     role = Column(String, default="investigator")  # investigator, admin
     is_active = Column(Boolean, default=True)
+    availability_status = Column(String, default="available")  # available, busy, away, offline
+    status_updated_at = Column(DateTime, nullable=True)
+    location_city = Column(String, nullable=True)
+    location_country = Column(String, nullable=True)
+    location_latitude = Column(Float, nullable=True)
+    location_longitude = Column(Float, nullable=True)
+    location_ip = Column(String, nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
+    last_activity_at = Column(DateTime, nullable=True)
+    password_changed_at = Column(DateTime, nullable=True)
+    two_factor_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -128,7 +139,245 @@ class AuditLog(Base):
     status = Column(String, default="success")  # success, warning, error
     details = Column(Text)
     user_id = Column(Integer, ForeignKey("users.id"))
+    ip_address = Column(String, nullable=True)  # Track IP address
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="audit_logs")
+
+
+class FraudTransaction(Base):
+    """Transaction records for fraud detection dataset"""
+    __tablename__ = "fraud_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    step = Column(Integer, nullable=False, index=True)  # Time step (1-744 for 30 days)
+    type = Column(String, nullable=False, index=True)  # CASH_IN, CASH_OUT, DEBIT, PAYMENT, TRANSFER
+    amount = Column(Float, nullable=False, index=True)
+    name_orig = Column(String, nullable=False, index=True)  # Origin customer (C prefix)
+    old_balance_orig = Column(Float, nullable=False)  # Balance before transaction
+    new_balance_orig = Column(Float, nullable=False)  # Balance after transaction
+    name_dest = Column(String, nullable=False, index=True)  # Destination customer (C or M prefix)
+    old_balance_dest = Column(Float, nullable=True)  # Destination balance before (null for merchants)
+    new_balance_dest = Column(Float, nullable=True)  # Destination balance after (null for merchants)
+    is_fraud = Column(Integer, default=0, index=True)  # 0 = normal, 1 = fraud
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        return {
+            "id": self.id,
+            "step": self.step,
+            "type": self.type,
+            "amount": self.amount,
+            "nameOrig": self.name_orig,
+            "oldbalanceOrg": self.old_balance_orig,
+            "newbalanceOrig": self.new_balance_orig,
+            "nameDest": self.name_dest,
+            "oldbalanceDest": self.old_balance_dest,
+            "newbalanceDest": self.new_balance_dest,
+            "isFraud": self.is_fraud,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Complaint(Base):
+    """Complaint filed by investigators"""
+    __tablename__ = "complaints"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_address = Column(String, nullable=False, index=True)
+    investigator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    officer_designation = Column(String, nullable=False)
+    officer_address = Column(Text, nullable=True)
+    officer_email = Column(Text, nullable=True)  # JSON array as string
+    officer_mobile = Column(Text, nullable=True)  # JSON array as string
+    officer_telephone = Column(Text, nullable=True)  # JSON array as string
+    incident_description = Column(Text, nullable=False)
+    internal_notes = Column(Text, nullable=True)
+    evidence_ids = Column(Text, nullable=True)  # JSON array as string
+    investigator_location_city = Column(String, nullable=True)
+    investigator_location_country = Column(String, nullable=True)
+    investigator_location_latitude = Column(Float, nullable=True)
+    investigator_location_longitude = Column(Float, nullable=True)
+    investigator_location_ip = Column(String, nullable=True)
+    status = Column(String, default="pending", index=True)  # pending, under_review, resolved, closed
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        import json
+        return {
+            "id": self.id,
+            "wallet_address": self.wallet_address,
+            "investigator_id": self.investigator_id,
+            "officer_designation": self.officer_designation,
+            "officer_address": self.officer_address,
+            "officer_email": json.loads(self.officer_email) if self.officer_email else [],
+            "officer_mobile": json.loads(self.officer_mobile) if self.officer_mobile else [],
+            "officer_telephone": json.loads(self.officer_telephone) if self.officer_telephone else [],
+            "incident_description": self.incident_description,
+            "internal_notes": self.internal_notes,
+            "evidence_ids": json.loads(self.evidence_ids) if self.evidence_ids else [],
+            "investigator_location_city": self.investigator_location_city,
+            "investigator_location_country": self.investigator_location_country,
+            "investigator_location_latitude": self.investigator_location_latitude,
+            "investigator_location_longitude": self.investigator_location_longitude,
+            "investigator_location_ip": self.investigator_location_ip,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class IncidentReport(Base):
+    """Incident report generated by AI analysis (stored in SQL/PostgreSQL)"""
+    __tablename__ = "incident_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_address = Column(String, index=True, nullable=False)
+    investigator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_description = Column(Text, nullable=False)
+    risk_score = Column(Float, nullable=False)
+    risk_level = Column(String, nullable=False)
+    detected_patterns = Column(Text, nullable=False, default="[]")  # JSON list of strings
+    summary = Column(Text, nullable=False, default="{}")  # JSON object
+    graph_data = Column(Text, nullable=False, default="[]")  # JSON list
+    timeline = Column(Text, nullable=False, default="[]")  # JSON list
+    system_conclusion = Column(Text, nullable=False)
+    status = Column(String, default="investigating", index=True)
+    notes = Column(Text, nullable=False, default="[]")  # JSON list of note objects
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """Helper to convert to dict shape expected by frontend."""
+        import json
+        try:
+            detected_patterns = json.loads(self.detected_patterns or "[]")
+        except Exception:
+            detected_patterns = []
+        try:
+            summary = json.loads(self.summary or "{}")
+        except Exception:
+            summary = {}
+        try:
+            graph_data = json.loads(self.graph_data or "[]")
+        except Exception:
+            graph_data = []
+        try:
+            timeline = json.loads(self.timeline or "[]")
+        except Exception:
+            timeline = []
+        try:
+            notes = json.loads(self.notes or "[]")
+        except Exception:
+            notes = []
+        
+        tx_details = summary.get("transactions", [])
+        
+        return {
+            "_id": str(self.id),
+            "wallet_address": self.wallet_address,
+            "user_description": self.user_description,
+            "risk_score": self.risk_score,
+            "risk_level": self.risk_level,
+            "detected_patterns": detected_patterns,
+            "summary": summary,
+            "graph_data": graph_data,
+            "timeline": timeline,
+            "transactions": tx_details,
+            "system_conclusion": self.system_conclusion,
+            "status": self.status,
+            "notes": notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class WatchlistWallet(Base):
+    """Wallets saved for ongoing monitoring / quick analysis"""
+    __tablename__ = "watchlist_wallets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_address = Column(String, nullable=False, index=True)
+    label = Column(String, nullable=True)
+    active = Column(Boolean, default=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        return {
+            "id": self.id,
+            "wallet_address": self.wallet_address,
+            "label": self.label,
+            "active": self.active,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Message(Base):
+    """Internal messages between superadmin and investigators"""
+    __tablename__ = "messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    message_type = Column(String, default="message")  # message, announcement, notification
+    subject = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False, index=True)
+    is_broadcast = Column(Boolean, default=False)
+    priority = Column(String, default="normal")  # low, normal, high, urgent
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        return {
+            "id": self.id,
+            "sender_id": self.sender_id,
+            "recipient_id": self.recipient_id,
+            "message_type": self.message_type,
+            "subject": self.subject,
+            "content": self.content,
+            "is_read": self.is_read,
+            "is_broadcast": self.is_broadcast,
+            "priority": self.priority,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+        }
+
+
+class InvestigatorAccessRequest(Base):
+    """Investigator access request model"""
+    __tablename__ = "investigator_access_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, index=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String, default="pending", index=True)  # pending, approved, rejected
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convert to dictionary for API response"""
+        return {
+            "id": self.id,
+            "full_name": self.full_name,
+            "email": self.email,
+            "reason": self.reason,
+            "status": self.status,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "rejection_reason": self.rejection_reason,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

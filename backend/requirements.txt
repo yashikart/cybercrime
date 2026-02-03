@@ -6,6 +6,7 @@ python-multipart==0.0.6
 # Database (Python 3.11.9 compatible)
 sqlalchemy==2.0.23
 alembic==1.12.1
+psycopg2-binary==2.9.9
 
 # MongoDB
 motor==3.3.2  # Async MongoDB driver
@@ -14,6 +15,7 @@ pymongo==4.6.1  # MongoDB driver
 # Auth & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-dotenv==1.0.0
 
 # Validation (Python 3.11.9 compatible with pre-built wheels)
@@ -26,6 +28,7 @@ cryptography==41.0.7
 
 # Utilities
 requests==2.31.0
+httpx==0.25.0
 python-dateutil==2.8.2
 aiofiles==23.2.1
 

@@ -1,0 +1,214 @@
+{
+  "wallet": "WALLET_XYZ",
+  "risk_score": 0.53,
+  "risk_level": "MEDIUM",
+  "detected_patterns": [
+    "Money Laundering (Layering)",
+    "Multiple Hop Transfers",
+    "Circular Movement",
+    "High Transaction Frequency"
+  ],
+  "summary": {
+    "total_in": 50222,
+    "total_out": 44086,
+    "tx_count": 19,
+    "unique_senders": 12,
+    "unique_receivers": 7,
+    "pattern_type": "Ponzi"
+  },
+  "graph_data": [
+    {
+      "from": "INVESTOR_6066",
+      "to": "WALLET_XYZ",
+      "amount": 4537
+    },
+    {
+      "from": "INVESTOR_6347",
+      "to": "WALLET_XYZ",
+      "amount": 3236
+    },
+    {
+      "from": "INVESTOR_3184",
+      "to": "WALLET_XYZ",
+      "amount": 1550
+    },
+    {
+      "from": "INVESTOR_2316",
+      "to": "WALLET_XYZ",
+      "amount": 5203
+    },
+    {
+      "from": "INVESTOR_5578",
+      "to": "WALLET_XYZ",
+      "amount": 2621
+    },
+    {
+      "from": "INVESTOR_2217",
+      "to": "WALLET_XYZ",
+      "amount": 2375
+    },
+    {
+      "from": "INVESTOR_9734",
+      "to": "WALLET_XYZ",
+      "amount": 5482
+    },
+    {
+      "from": "INVESTOR_8900",
+      "to": "WALLET_XYZ",
+      "amount": 5129
+    },
+    {
+      "from": "INVESTOR_5072",
+      "to": "WALLET_XYZ",
+      "amount": 6401
+    },
+    {
+      "from": "INVESTOR_1713",
+      "to": "WALLET_XYZ",
+      "amount": 4205
+    },
+    {
+      "from": "INVESTOR_4316",
+      "to": "WALLET_XYZ",
+      "amount": 3098
+    },
+    {
+      "from": "INVESTOR_4429",
+      "to": "WALLET_XYZ",
+      "amount": 6385
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_6066",
+      "amount": 5064
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_6347",
+      "amount": 3840
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_3184",
+      "amount": 1716
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_2316",
+      "amount": 5743
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_5578",
+      "amount": 3044
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "INVESTOR_2217",
+      "amount": 2874
+    },
+    {
+      "from": "WALLET_XYZ",
+      "to": "EXIT_1544",
+      "amount": 21805
+    }
+  ],
+  "timeline": [
+    {
+      "time": "17:03",
+      "amount": 4537,
+      "timestamp": "2025-12-27T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 3236,
+      "timestamp": "2025-12-28T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 1550,
+      "timestamp": "2025-12-29T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 5203,
+      "timestamp": "2025-12-30T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 2621,
+      "timestamp": "2025-12-31T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 2375,
+      "timestamp": "2026-01-01T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 5482,
+      "timestamp": "2026-01-02T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 5129,
+      "timestamp": "2026-01-03T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 6401,
+      "timestamp": "2026-01-04T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 4205,
+      "timestamp": "2026-01-05T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 3098,
+      "timestamp": "2026-01-06T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 6385,
+      "timestamp": "2026-01-07T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 5064,
+      "timestamp": "2026-01-11T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 3840,
+      "timestamp": "2026-01-12T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 1716,
+      "timestamp": "2026-01-13T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 5743,
+      "timestamp": "2026-01-14T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 3044,
+      "timestamp": "2026-01-15T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 2874,
+      "timestamp": "2026-01-16T17:03:32.570035"
+    },
+    {
+      "time": "17:03",
+      "amount": 21805,
+      "timestamp": "2026-01-26T17:03:32.570035"
+    }
+  ],
+  "system_conclusion": "This wallet exhibits behavior consistent with a Ponzi scheme, showing multiple investors over time with early investors receiving returns funded by later investors. The risk score of 53% indicates moderate risk requiring monitoring."
+}

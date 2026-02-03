@@ -1,23 +1,20 @@
 import { 
   LayoutDashboard, 
-  FolderOpen, 
   AlertTriangle, 
   Database, 
-  Phone, 
   FileText, 
-  Cpu, 
   Users, 
-  UserPlus, 
-  KeyRound, 
-  Shield,
-  ChevronDown,
   Terminal,
   Activity,
   LogOut,
-  User
+  User,
+  UserCog,
+  Mail,
+  Brain,
+  UserCheck
 } from "lucide-react";
 import { MenuItem } from "./AdminDashboard";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SidebarProps {
   activeItem: MenuItem;
@@ -26,23 +23,42 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeItem, setActiveItem, onLogout }: SidebarProps) {
-  const [userManagementOpen, setUserManagementOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("admin@cybercrime.gov");
+
+  useEffect(() => {
+    // Get logged-in email from localStorage
+    const email = localStorage.getItem("admin_email") || "admin@cybercrime.gov";
+    setUserEmail(email);
+  }, []);
+
+  const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem("admin_token");
+    localStorage.removeItem("admin_email");
+    
+    // Call the onLogout callback if provided
+    if (onLogout) {
+      onLogout();
+    } else {
+      // Fallback: redirect to landing page
+      window.location.href = "/";
+    }
+  };
 
   const menuItems = [
     { id: "dashboard" as MenuItem, label: "Dashboard", icon: LayoutDashboard },
-    { id: "case-manager" as MenuItem, label: "Case Manager", icon: FolderOpen },
+    { id: "manual-investigator" as MenuItem, label: "Manual Investigator", icon: UserCog },
+    { id: "investigators-management" as MenuItem, label: "Investigators Management", icon: Users },
+    { id: "investigator-activity" as MenuItem, label: "Investigator Activity", icon: Activity },
+    { id: "investigator-status" as MenuItem, label: "Status & Health", icon: Activity },
+    { id: "investigator-communication" as MenuItem, label: "Communication Hub", icon: Mail },
     { id: "escalations" as MenuItem, label: "Escalations", icon: AlertTriangle },
     { id: "evidence-library" as MenuItem, label: "Evidence Library", icon: Database },
-    { id: "contact-police" as MenuItem, label: "Contact Police", icon: Phone },
-    { id: "system-logs" as MenuItem, label: "System Logs", icon: FileText },
-    { id: "rl-engine" as MenuItem, label: "RL Engine", icon: Cpu },
+    { id: "complaints-view" as MenuItem, label: "Filed Complaints", icon: FileText },
+    { id: "fraud-detection" as MenuItem, label: "AI Fraud Detection", icon: Brain },
+    { id: "access-requests" as MenuItem, label: "Access Requests", icon: UserCheck },
   ];
 
-  const userManagementItems = [
-    { id: "add-remove-investigators" as MenuItem, label: "Add / Remove Investigators", icon: UserPlus },
-    { id: "reset-passwords" as MenuItem, label: "Reset Passwords", icon: KeyRound },
-    { id: "setup-2fa" as MenuItem, label: "Setup 2FA", icon: Shield },
-  ];
 
   return (
     <aside className="fixed left-0 top-0 w-72 h-screen bg-gradient-to-b from-gray-900/95 to-black/95 backdrop-blur-xl border-r border-emerald-500/20 flex flex-col overflow-hidden z-50">
@@ -87,46 +103,6 @@ export function Sidebar({ activeItem, setActiveItem, onLogout }: SidebarProps) {
               </button>
             </li>
           ))}
-
-          {/* User Management Dropdown */}
-          <li>
-            <button
-              onClick={() => setUserManagementOpen(!userManagementOpen)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
-                ["add-remove-investigators", "reset-passwords", "setup-2fa"].includes(activeItem)
-                  ? "bg-gradient-to-r from-emerald-600/20 to-cyan-600/20 border border-emerald-500/40 text-emerald-400"
-                  : "text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/5"
-              }`}
-            >
-              <Users className={`w-5 h-5 ${["add-remove-investigators", "reset-passwords", "setup-2fa"].includes(activeItem) ? "text-emerald-400" : "text-gray-500 group-hover:text-emerald-400"}`} />
-              <span className="font-mono text-sm">User Management</span>
-              <ChevronDown className={`ml-auto w-4 h-4 transition-transform ${userManagementOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {/* Submenu */}
-            {userManagementOpen && (
-              <ul className="mt-1 ml-4 space-y-1 border-l border-emerald-500/20 pl-4">
-                {userManagementItems.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      onClick={() => setActiveItem(item.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm group ${
-                        activeItem === item.id
-                          ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-400"
-                          : "text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/5"
-                      }`}
-                    >
-                      <item.icon className="w-4 h-4" />
-                      <span className="font-mono text-xs">{item.label}</span>
-                      {activeItem === item.id && (
-                        <div className="ml-auto w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
         </ul>
       </nav>
 
@@ -138,14 +114,14 @@ export function Sidebar({ activeItem, setActiveItem, onLogout }: SidebarProps) {
             <User className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-gray-200 font-mono text-sm truncate">Admin User</p>
-            <p className="text-gray-600 font-mono text-xs">admin@cybercrime.gov</p>
+            <p className="text-gray-200 font-mono text-sm truncate">Superadmin</p>
+            <p className="text-gray-600 font-mono text-xs truncate" title={userEmail}>{userEmail}</p>
           </div>
         </div>
 
         {/* Logout Button */}
         <button
-          onClick={onLogout}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group bg-red-950/20 border border-red-500/30 text-red-400 hover:bg-red-600/20 hover:border-red-500/50"
         >
           <LogOut className="w-5 h-5" />

@@ -41,15 +41,41 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    
+    try {
+      // Normalize email (lowercase, trim)
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Use FormData for OAuth2PasswordRequestForm compatibility
+      const formData = new FormData();
+      formData.append("username", normalizedEmail); // OAuth2 uses "username" field for email
+      formData.append("password", password);
+      
+      const response = await fetch("http://localhost:3000/api/v1/auth/login", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Store token in localStorage
+        localStorage.setItem("investigator_token", data.access_token);
+        localStorage.setItem("investigator_email", normalizedEmail);
+        // Redirect to investigator dashboard
+        setCurrentPage("investigator-dashboard");
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.detail || "Login failed. Please check your credentials.");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Error connecting to server. Please try again.");
+    } finally {
       setIsLoading(false);
-      console.log("Investigator login attempted with:", { email, password });
-      // Redirect to investigator dashboard on successful login
-      setCurrentPage("investigator-dashboard");
-    }, 2000);
+    }
   };
 
   const handleCreateAccountSubmit = (e: React.FormEvent) => {

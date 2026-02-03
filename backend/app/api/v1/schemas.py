@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation
 """
 
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -111,6 +111,9 @@ class EvidenceBase(BaseModel):
     title: str
     description: Optional[str] = None
     hash: str
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None
     anchor_status: Optional[str] = "pending"
     immutable: Optional[bool] = True
 
@@ -170,6 +173,7 @@ class AuditLogResponse(BaseModel):
 class IncidentReportRequest(BaseModel):
     wallet_address: str
     description: str
+    investigator_id: Optional[int] = None
 
 
 class TransactionSummary(BaseModel):
@@ -196,13 +200,66 @@ class TimelineEntry(BaseModel):
     timestamp: str
 
 
+class TransactionDetail(BaseModel):
+    id: int
+    from_address: str
+    to_address: str
+    amount: float
+    direction: str
+    timestamp: Optional[str] = None
+    type: Optional[str] = None
+    suspicious: bool = False
+
+
 class IncidentReportResponse(BaseModel):
     wallet: str
     risk_score: float
     risk_level: str
-    detected_patterns: list[str]
+    detected_patterns: List[str]
     summary: TransactionSummary
-    graph_data: list[GraphEdge]
-    timeline: list[TimelineEntry]
+    graph_data: List[GraphEdge]
+    timeline: List[TimelineEntry]
+    transactions: Optional[List[TransactionDetail]] = None
     system_conclusion: str
     report_id: Optional[str] = None  # MongoDB document ID
+
+
+# Complaint Schemas
+class ComplaintCreate(BaseModel):
+    wallet_address: str
+    investigator_id: Optional[int] = None  # Track which investigator filed it
+    officer_designation: str
+    officer_address: Optional[str] = None
+    officer_email: Optional[List[str]] = None
+    officer_mobile: Optional[List[str]] = None
+    officer_telephone: Optional[List[str]] = None
+    incident_description: str
+    internal_notes: Optional[str] = None
+    evidence_ids: Optional[List[int]] = None
+    investigator_location_city: Optional[str] = None
+    investigator_location_country: Optional[str] = None
+    investigator_location_latitude: Optional[float] = None
+    investigator_location_longitude: Optional[float] = None
+    investigator_location_ip: Optional[str] = None
+
+
+class ComplaintResponse(BaseModel):
+    id: int
+    wallet_address: str
+    investigator_id: Optional[int] = None
+    officer_designation: str
+    officer_address: Optional[str] = None
+    officer_email: Optional[List[str]] = None
+    officer_mobile: Optional[List[str]] = None
+    officer_telephone: Optional[List[str]] = None
+    incident_description: str
+    internal_notes: Optional[str] = None
+    evidence_ids: Optional[List[int]] = None
+    investigator_location_city: Optional[str] = None
+    investigator_location_country: Optional[str] = None
+    investigator_location_latitude: Optional[float] = None
+    investigator_location_longitude: Optional[float] = None
+    investigator_location_ip: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

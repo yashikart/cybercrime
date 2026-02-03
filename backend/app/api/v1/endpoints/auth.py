@@ -44,17 +44,55 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login and get access token"""
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Normalize email (lowercase, strip whitespace)
+    email = form_data.username.lower().strip()
+    
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="User not found. Please check your email or initialize the superadmin account.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated. Please contact administrator.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Update last login time and create audit log
+    from datetime import datetime
+    from app.db.models import AuditLog
+    
+    user.last_login_at = datetime.utcnow()
+    user.last_activity_at = datetime.utcnow()
+    
+    # Create audit log entry for login
+    audit_log = AuditLog(
+        action="User Login",
+        entity_type="user",
+        entity_id=str(user.id),
+        status="success",
+        details=f"User {user.email} logged in successfully",
+        user_id=user.id,
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    db.commit()
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email, "user_id": user.id},
+        data={"sub": user.email, "user_id": user.id, "role": user.role},
         expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}

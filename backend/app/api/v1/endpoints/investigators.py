@@ -1,0 +1,1173 @@
+"""
+Admin endpoints for managing investigators
+"""
+
+import secrets
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Optional, List
+
+import httpx
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
+
+from app.db.database import get_db, engine
+from app.db.models import User
+from app.core.config import settings
+from app.core.security import get_password_hash
+
+router = APIRouter()
+
+
+class SendWelcomeEmailRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = "Investigator"
+    location_city: Optional[str] = None
+    location_country: Optional[str] = None
+    location_latitude: Optional[float] = None
+    location_longitude: Optional[float] = None
+    location_ip: Optional[str] = None
+
+
+class DatabaseStatusResponse(BaseModel):
+    connected: bool
+    database_type: str
+    message: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    old_password: str
+    new_password: str
+    reset_token: Optional[str] = None
+
+
+def generate_password(length: int = 12) -> str:
+    """Generate a secure random password"""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    password = ''.join(secrets.choice(alphabet) for i in range(length))
+    return password
+
+
+def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_content: str) -> tuple[bool, str]:
+    """
+    Send email using Brevo.
+
+    Preferred: HTTPS API with BREVO_API_KEY (works on Render where SMTP is blocked).
+    Fallback: SMTP using MAIL_* settings (for local/dev environments that allow SMTP).
+
+    Returns:
+        tuple: (success: bool, error_message: str)
+    """
+    # First try Brevo HTTPS API if API key is configured
+    if settings.BREVO_API_KEY:
+        try:
+            payload = {
+                "sender": {
+                    "name": settings.MAIL_FROM_NAME,
+                    "email": settings.MAIL_FROM,
+                },
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html_content,
+                "textContent": text_content,
+            }
+
+            headers = {
+                "accept": "application/json",
+                "content-type": "application/json",
+                "api-key": settings.BREVO_API_KEY,
+            }
+
+            print(f"[BREVO API] Sending email to {to_email} via HTTPS API...")
+            with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
+                response = client.post(
+                    "https://api.brevo.com/v3/smtp/email",
+                    headers=headers,
+                    json=payload,
+                )
+
+            if 200 <= response.status_code < 300:
+                print(f"[BREVO API] Email sent successfully to {to_email}")
+                return True, ""
+
+            error_msg = f"Brevo API error {response.status_code}: {response.text}"
+            print(f"[BREVO API] {error_msg}")
+            return False, error_msg
+
+        except Exception as e:
+            error_msg = f"Unexpected error calling Brevo API: {type(e).__name__}: {str(e)}"
+            print(f"[BREVO API] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            # fall through to SMTP fallback
+
+    # Fallback: SMTP (useful for local dev if API key not configured)
+    server = None
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>"
+        msg["To"] = to_email
+
+        part1 = MIMEText(text_content, "plain", "utf-8")
+        part2 = MIMEText(html_content, "html", "utf-8")
+        msg.attach(part1)
+        msg.attach(part2)
+
+        print(f"[BREVO SMTP] Connecting to {settings.MAIL_SERVER}:{settings.MAIL_PORT}...")
+        server = smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT, timeout=30)
+        server.set_debuglevel(0)
+
+        if settings.MAIL_STARTTLS:
+            print("[BREVO SMTP] Starting TLS...")
+            server.starttls()
+
+        if settings.USE_CREDENTIALS:
+            print(f"[BREVO SMTP] Authenticating with username: {settings.MAIL_USERNAME}")
+            server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
+
+        print("[BREVO SMTP] Authentication successful, sending email...")
+        server.send_message(msg)
+        print(f"[BREVO SMTP] Email sent successfully to {to_email}")
+        return True, ""
+
+    except smtplib.SMTPAuthenticationError as e:
+        error_msg = (
+            f"SMTP Authentication failed: {str(e)}. Please verify: "
+            f"1) Username '{settings.MAIL_USERNAME}' is correct, "
+            f"2) API key is valid, "
+            f"3) Sender email '{settings.MAIL_FROM}' is verified in Brevo dashboard."
+        )
+        print(f"[BREVO SMTP] Auth Error: {error_msg}")
+        return False, error_msg
+    except smtplib.SMTPRecipientsRefused as e:
+        error_msg = f"Recipient email '{to_email}' was rejected by server: {str(e)}"
+        print(f"[BREVO SMTP] Recipient Error: {error_msg}")
+        return False, error_msg
+    except smtplib.SMTPServerDisconnected as e:
+        error_msg = (
+            f"SMTP server disconnected: {str(e)}. "
+            f"Check your network connection and Brevo server status."
+        )
+        print(f"[BREVO SMTP] Connection Error: {error_msg}")
+        return False, error_msg
+    except smtplib.SMTPException as e:
+        error_msg = f"SMTP error occurred: {str(e)}"
+        print(f"[BREVO SMTP] Error: {error_msg}")
+        return False, error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error sending email via SMTP: {type(e).__name__}: {str(e)}"
+        print(f"[BREVO SMTP] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return False, error_msg
+    finally:
+        if server:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+
+@router.post("/init-superadmin")
+async def init_superadmin(db: Session = Depends(get_db)):
+    """Initialize or reset superadmin account (ensures account exists with correct password)"""
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    # Check if superadmin already exists
+    existing_user = db.query(User).filter(User.email == superadmin_email).first()
+    
+    if existing_user:
+        # Update existing account to ensure it's correct
+        existing_user.role = "superadmin"
+        existing_user.is_active = True
+        existing_user.hashed_password = get_password_hash("admin")  # Always reset to "admin"
+        existing_user.full_name = "Super Admin"
+        db.commit()
+        db.refresh(existing_user)
+        
+        return {
+            "success": True,
+            "message": "Superadmin account verified and password reset to default",
+            "email": existing_user.email,
+            "role": existing_user.role,
+            "action": "updated"
+        }
+    else:
+        # Create new superadmin account
+        hashed_password = get_password_hash("admin")
+        superadmin = User(
+            email=superadmin_email,
+            full_name="Super Admin",
+            hashed_password=hashed_password,
+            role="superadmin",
+            is_active=True
+        )
+        db.add(superadmin)
+        db.commit()
+        db.refresh(superadmin)
+        
+        return {
+            "success": True,
+            "message": "Superadmin account created successfully",
+            "email": superadmin.email,
+            "role": superadmin.role,
+            "action": "created"
+        }
+
+
+@router.post("/reset-password")
+async def reset_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Reset password for an investigator - requires old password verification"""
+    from app.core.security import verify_password
+    
+    # Find user by email
+    user = db.query(User).filter(User.email == request.email.lower().strip()).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    # Verify old password
+    if not verify_password(request.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Old password is incorrect"
+        )
+    
+    # Check if new password is different from old password
+    if verify_password(request.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from the old password"
+        )
+    
+    # Hash the new password
+    from datetime import datetime
+    hashed_password = get_password_hash(request.new_password)
+    user.hashed_password = hashed_password
+    user.password_changed_at = datetime.utcnow()  # Track password change
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "success": True,
+        "message": "Password reset successfully",
+        "email": user.email
+    }
+
+
+@router.get("/check-superadmin")
+async def check_superadmin(db: Session = Depends(get_db)):
+    """Check if superadmin account exists"""
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    user = db.query(User).filter(User.email == superadmin_email).first()
+    
+    if user:
+        return {
+            "exists": True,
+            "email": user.email,
+            "role": user.role,
+            "is_active": user.is_active
+        }
+    else:
+        return {
+            "exists": False,
+            "message": "Superadmin account not found. Please initialize it first."
+        }
+
+
+@router.delete("/delete-all-investigators")
+async def delete_all_investigators(db: Session = Depends(get_db)):
+    """Delete all investigator accounts (except superadmin)"""
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    # Get all investigators (excluding superadmin)
+    investigators = db.query(User).filter(
+        User.role == "investigator"
+    ).all()
+    
+    count = len(investigators)
+    
+    if count == 0:
+        return {
+            "success": True,
+            "message": "No investigator accounts found to delete",
+            "deleted_count": 0
+        }
+    
+    # Delete all investigators
+    for investigator in investigators:
+        db.delete(investigator)
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Successfully deleted {count} investigator account(s)",
+        "deleted_count": count
+    }
+
+
+@router.get("/investigators")
+async def list_investigators(db: Session = Depends(get_db)):
+    """Get list of all investigators (excludes superadmin)"""
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    # Get all investigators, explicitly excluding superadmin
+    investigators = db.query(User).filter(
+        User.role == "investigator",
+        User.email != superadmin_email
+    ).all()
+    
+    return {
+        "count": len(investigators),
+        "investigators": [
+            {
+                "id": inv.id,
+                "email": inv.email,
+                "full_name": inv.full_name,
+                "is_active": inv.is_active,
+                "location_city": inv.location_city,
+                "location_country": inv.location_country,
+                "location_latitude": inv.location_latitude,
+                "location_longitude": inv.location_longitude,
+                "location_ip": inv.location_ip,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None
+            }
+            for inv in investigators
+        ]
+    }
+
+
+@router.get("/location-from-ip")
+async def get_location_from_ip(ip_address: Optional[str] = None):
+    """Get location information from IP address using ip-api.com (free tier)"""
+    import httpx
+    
+    # If no IP provided, try to get from request (would need Request dependency)
+    if not ip_address:
+        return {
+            "success": False,
+            "message": "IP address is required"
+        }
+    
+    try:
+        # Using ip-api.com free tier (no API key needed, 45 requests/minute limit)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"http://ip-api.com/json/{ip_address}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    return {
+                        "success": True,
+                        "city": data.get("city"),
+                        "country": data.get("country"),
+                        "countryCode": data.get("countryCode"),
+                        "region": data.get("regionName"),
+                        "latitude": data.get("lat"),
+                        "longitude": data.get("lon"),
+                        "timezone": data.get("timezone"),
+                        "isp": data.get("isp"),
+                        "ip": data.get("query")
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": data.get("message", "Failed to get location")
+                    }
+            else:
+                return {
+                    "success": False,
+                    "message": f"API returned status {response.status_code}"
+                }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error fetching location: {str(e)}"
+        }
+
+
+@router.delete("/investigators/{investigator_id}")
+async def delete_investigator(investigator_id: int, db: Session = Depends(get_db)):
+    """Delete a single investigator by ID"""
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    # Find the investigator
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    
+    if not investigator:
+        raise HTTPException(
+            status_code=404,
+            detail="Investigator not found"
+        )
+    
+    # Prevent deletion of superadmin
+    if investigator.email.lower().strip() == superadmin_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete superadmin account"
+        )
+    
+    # Only allow deletion of investigators
+    if investigator.role != "investigator":
+        raise HTTPException(
+            status_code=400,
+            detail="Can only delete investigator accounts"
+        )
+    
+    # Delete the investigator
+    db.delete(investigator)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Investigator {investigator.email} deleted successfully",
+        "deleted_id": investigator_id
+    }
+
+
+@router.get("/database/status")
+async def check_database_status():
+    """Check database connection status"""
+    try:
+        # Try to connect to the database
+        with engine.connect() as conn:
+            # Execute a simple query to verify connection
+            from sqlalchemy import text
+            conn.execute(text("SELECT 1"))
+            
+        database_type = "SQLite" if "sqlite" in settings.DATABASE_URL else "PostgreSQL"
+        return DatabaseStatusResponse(
+            connected=True,
+            database_type=database_type,
+            message=f"Successfully connected to {database_type} database"
+        )
+    except Exception as e:
+        return DatabaseStatusResponse(
+            connected=False,
+            database_type="Unknown",
+            message=f"Database connection failed: {str(e)}"
+        )
+
+
+@router.post("/send-welcome-email")
+async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Depends(get_db)):
+    """Create investigator account and send welcome email with auto-generated password and reset link"""
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail=f"User with email {request.email} already exists"
+        )
+    
+    # Generate unique password
+    password = generate_password(16)
+    
+    # Hash the password
+    hashed_password = get_password_hash(password)
+    
+    # Create user account in database
+    new_user = User(
+        email=request.email,
+        full_name=request.name or "Investigator",
+        hashed_password=hashed_password,
+        role="investigator",
+        is_active=True,
+        location_city=request.location_city,
+        location_country=request.location_country,
+        location_latitude=request.location_latitude,
+        location_longitude=request.location_longitude,
+        location_ip=request.location_ip
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Generate password reset token (in production, store this in DB with expiration)
+    reset_token = secrets.token_urlsafe(32)
+    reset_link = f"http://localhost:5173/reset-password?token={reset_token}&email={request.email}"
+    
+    # Email content
+    subject = "Welcome to Cybercrime Investigation System"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }}
+            .credentials {{ background: #1f2937; color: #10b981; padding: 15px; border-radius: 5px; margin: 20px 0; font-family: monospace; }}
+            .button {{ display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔒 Cybercrime Investigation System</h1>
+            </div>
+            <div class="content">
+                <h2>Welcome, {request.name or 'Investigator'}!</h2>
+                <p>Your account has been created in the Cybercrime Investigation System. Below are your login credentials:</p>
+                
+                <div class="credentials">
+                    <strong>Email:</strong> {request.email}<br>
+                    <strong>Password:</strong> {password}
+                </div>
+                
+                <p><strong>Important Security Notice:</strong></p>
+                <ul>
+                    <li>Please change your password immediately after first login</li>
+                    <li>Do not share your password with anyone</li>
+                    <li>If you did not request this account, please contact the administrator</li>
+                </ul>
+                
+                <p>To reset your password, click the button below:</p>
+                <a href="{reset_link}" class="button">Reset Password</a>
+                
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; color: #6b7280; font-size: 12px;">{reset_link}</p>
+            </div>
+            <div class="footer">
+                <p>This is an automated message. Please do not reply to this email.</p>
+                <p>&copy; 2024 Cybercrime Investigation System. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    Welcome to Cybercrime Investigation System
+    
+    Hello {request.name or 'Investigator'},
+    
+    Your account has been created. Here are your login credentials:
+    
+    Email: {request.email}
+    Password: {password}
+    
+    Important Security Notice:
+    - Please change your password immediately after first login
+    - Do not share your password with anyone
+    - If you did not request this account, please contact the administrator
+    
+    To reset your password, visit:
+    {reset_link}
+    
+    This is an automated message. Please do not reply to this email.
+    
+    © 2024 Cybercrime Investigation System. All rights reserved.
+    """
+    
+    # Send email
+    success, error_message = send_email_via_brevo(request.email, subject, html_content, text_content)
+    
+    if not success:
+        raise HTTPException(
+            status_code=500, 
+            detail=error_message or "Failed to send welcome email. Please check SMTP configuration."
+        )
+    
+    return {
+        "success": True,
+        "message": f"Investigator account created and welcome email sent successfully to {request.email}",
+        "user_id": new_user.id,
+        "email": new_user.email,
+        "password": password,  # Return password so admin can see it (in production, don't return this)
+        "reset_link": reset_link
+    }
+
+
+@router.get("/{investigator_id}/activity")
+async def get_investigator_activity(investigator_id: int, db: Session = Depends(get_db)):
+    """Get comprehensive activity data for a specific investigator"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, and_
+    from app.db.models import Evidence, Complaint, IncidentReport, WatchlistWallet, User
+    
+    # Get the investigator
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    if not investigator:
+        raise HTTPException(status_code=404, detail="Investigator not found")
+    
+    if investigator.role != "investigator":
+        raise HTTPException(status_code=400, detail="User is not an investigator")
+    
+    # Calculate date ranges
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
+    
+    # Evidence uploads
+    evidence_today = db.query(func.count(Evidence.id)).filter(
+        and_(
+            Evidence.investigator_id == investigator_id,
+            Evidence.created_at >= today_start
+        )
+    ).scalar() or 0
+    
+    evidence_week = db.query(func.count(Evidence.id)).filter(
+        and_(
+            Evidence.investigator_id == investigator_id,
+            Evidence.created_at >= week_start
+        )
+    ).scalar() or 0
+    
+    evidence_month = db.query(func.count(Evidence.id)).filter(
+        and_(
+            Evidence.investigator_id == investigator_id,
+            Evidence.created_at >= month_start
+        )
+    ).scalar() or 0
+    
+    evidence_total = db.query(func.count(Evidence.id)).filter(
+        Evidence.investigator_id == investigator_id
+    ).scalar() or 0
+    
+    # Complaints filed
+    complaints_today = db.query(func.count(Complaint.id)).filter(
+        and_(
+            Complaint.created_at >= today_start
+        )
+    ).scalar() or 0  # Note: Complaint doesn't have investigator_id, using created_at as proxy
+    
+    complaints_week = db.query(func.count(Complaint.id)).filter(
+        and_(
+            Complaint.created_at >= week_start
+        )
+    ).scalar() or 0
+    
+    complaints_month = db.query(func.count(Complaint.id)).filter(
+        and_(
+            Complaint.created_at >= month_start
+        )
+    ).scalar() or 0
+    
+    complaints_total = db.query(func.count(Complaint.id)).scalar() or 0
+    
+    # Incident reports (AI analysis)
+    # Note: IncidentReport doesn't have investigator_id, we'll need to estimate based on created_at
+    # For now, we'll get all reports and let frontend filter if needed
+    reports_today = db.query(func.count(IncidentReport.id)).filter(
+        and_(
+            IncidentReport.created_at >= today_start
+        )
+    ).scalar() or 0
+    
+    reports_week = db.query(func.count(IncidentReport.id)).filter(
+        and_(
+            IncidentReport.created_at >= week_start
+        )
+    ).scalar() or 0
+    
+    reports_month = db.query(func.count(IncidentReport.id)).filter(
+        and_(
+            IncidentReport.created_at >= month_start
+        )
+    ).scalar() or 0
+    
+    reports_total = db.query(func.count(IncidentReport.id)).scalar() or 0
+    
+    # Watchlist entries
+    watchlist_today = db.query(func.count(WatchlistWallet.id)).filter(
+        and_(
+            WatchlistWallet.created_by == investigator_id,
+            WatchlistWallet.created_at >= today_start
+        )
+    ).scalar() or 0
+    
+    watchlist_week = db.query(func.count(WatchlistWallet.id)).filter(
+        and_(
+            WatchlistWallet.created_by == investigator_id,
+            WatchlistWallet.created_at >= week_start
+        )
+    ).scalar() or 0
+    
+    watchlist_month = db.query(func.count(WatchlistWallet.id)).filter(
+        and_(
+            WatchlistWallet.created_by == investigator_id,
+            WatchlistWallet.created_at >= month_start
+        )
+    ).scalar() or 0
+    
+    watchlist_total = db.query(func.count(WatchlistWallet.id)).filter(
+        WatchlistWallet.created_by == investigator_id
+    ).scalar() or 0
+    
+    # Get recent activity timeline (last 50 activities)
+    activities = []
+    
+    # Recent evidence uploads
+    recent_evidence = db.query(Evidence).filter(
+        Evidence.investigator_id == investigator_id
+    ).order_by(Evidence.created_at.desc()).limit(20).all()
+    
+    for ev in recent_evidence:
+        activities.append({
+            "type": "evidence_upload",
+            "action": "Uploaded evidence",
+            "description": ev.title or ev.evidence_id,
+            "timestamp": ev.created_at.isoformat() if ev.created_at else None,
+            "entity_id": ev.id
+        })
+    
+    # Recent watchlist additions
+    recent_watchlist = db.query(WatchlistWallet).filter(
+        WatchlistWallet.created_by == investigator_id
+    ).order_by(WatchlistWallet.created_at.desc()).limit(10).all()
+    
+    for wl in recent_watchlist:
+        activities.append({
+            "type": "watchlist_add",
+            "action": "Added to watchlist",
+            "description": wl.wallet_address,
+            "timestamp": wl.created_at.isoformat() if wl.created_at else None,
+            "entity_id": wl.id
+        })
+    
+    # Sort activities by timestamp (most recent first)
+    activities.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    activities = activities[:50]  # Limit to 50 most recent
+    
+    return {
+        "investigator": {
+            "id": investigator.id,
+            "email": investigator.email,
+            "full_name": investigator.full_name,
+            "is_active": investigator.is_active,
+            "last_login_at": investigator.last_login_at.isoformat() if investigator.last_login_at else None,
+            "last_activity_at": investigator.last_activity_at.isoformat() if investigator.last_activity_at else None,
+            "created_at": investigator.created_at.isoformat() if investigator.created_at else None
+        },
+        "statistics": {
+            "evidence": {
+                "today": evidence_today,
+                "week": evidence_week,
+                "month": evidence_month,
+                "total": evidence_total
+            },
+            "complaints": {
+                "today": complaints_today,
+                "week": complaints_week,
+                "month": complaints_month,
+                "total": complaints_total
+            },
+            "incident_reports": {
+                "today": reports_today,
+                "week": reports_week,
+                "month": reports_month,
+                "total": reports_total
+            },
+            "watchlist": {
+                "today": watchlist_today,
+                "week": watchlist_week,
+                "month": watchlist_month,
+                "total": watchlist_total
+            }
+        },
+        "activity_timeline": activities
+    }
+
+
+@router.get("/activity/all")
+async def get_all_investigators_activity(db: Session = Depends(get_db)):
+    """Get activity summary for all investigators"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, and_
+    from app.db.models import Evidence, Complaint, IncidentReport, WatchlistWallet, User
+    
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    # Get all investigators
+    investigators = db.query(User).filter(
+        User.role == "investigator",
+        User.email != superadmin_email
+    ).all()
+    
+    # Calculate date ranges
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
+    
+    result = []
+    
+    for inv in investigators:
+        # Quick stats for each investigator
+        evidence_count = db.query(func.count(Evidence.id)).filter(
+            Evidence.investigator_id == inv.id
+        ).scalar() or 0
+        
+        watchlist_count = db.query(func.count(WatchlistWallet.id)).filter(
+            WatchlistWallet.created_by == inv.id
+        ).scalar() or 0
+        
+        # Get last activity (most recent evidence or watchlist entry)
+        last_evidence = db.query(Evidence).filter(
+            Evidence.investigator_id == inv.id
+        ).order_by(Evidence.created_at.desc()).first()
+        
+        last_watchlist = db.query(WatchlistWallet).filter(
+            WatchlistWallet.created_by == inv.id
+        ).order_by(WatchlistWallet.created_at.desc()).first()
+        
+        last_activity = None
+        if last_evidence and last_watchlist:
+            last_activity = max(last_evidence.created_at, last_watchlist.created_at) if last_evidence.created_at and last_watchlist.created_at else (last_evidence.created_at or last_watchlist.created_at)
+        elif last_evidence:
+            last_activity = last_evidence.created_at
+        elif last_watchlist:
+            last_activity = last_watchlist.created_at
+        
+        result.append({
+            "id": inv.id,
+            "email": inv.email,
+            "full_name": inv.full_name,
+            "is_active": inv.is_active,
+            "last_login_at": inv.last_login_at.isoformat() if inv.last_login_at else None,
+            "last_activity_at": inv.last_activity_at.isoformat() if inv.last_activity_at else None,
+            "evidence_count": evidence_count,
+            "watchlist_count": watchlist_count,
+            "last_activity": last_activity.isoformat() if last_activity else None
+        })
+    
+    return {
+        "count": len(result),
+        "investigators": result
+    }
+
+
+@router.get("/{investigator_id}/activity-logs")
+async def get_investigator_activity_logs(
+    investigator_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    action_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get detailed activity logs for a specific investigator"""
+    from datetime import datetime
+    from sqlalchemy import and_
+    from app.db.models import AuditLog, Evidence, Complaint, IncidentReport, WatchlistWallet, User
+    
+    # Verify investigator exists
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    if not investigator:
+        raise HTTPException(status_code=404, detail="Investigator not found")
+    
+    if investigator.role != "investigator":
+        raise HTTPException(status_code=400, detail="User is not an investigator")
+    
+    # Build query for audit logs
+    query = db.query(AuditLog).filter(AuditLog.user_id == investigator_id)
+    
+    # Apply filters
+    if action_type:
+        query = query.filter(AuditLog.action.ilike(f"%{action_type}%"))
+    
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            query = query.filter(AuditLog.timestamp >= start_dt)
+        except:
+            pass
+    
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            query = query.filter(AuditLog.timestamp <= end_dt)
+        except:
+            pass
+    
+    # Get audit logs
+    audit_logs = query.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+    
+    # Also get activity from other tables
+    activities = []
+    
+    # Evidence uploads
+    evidence_list = db.query(Evidence).filter(
+        Evidence.investigator_id == investigator_id
+    ).order_by(Evidence.created_at.desc()).limit(50).all()
+    
+    for ev in evidence_list:
+        activities.append({
+            "type": "evidence_upload",
+            "action": "Evidence Uploaded",
+            "entity_type": "evidence",
+            "entity_id": str(ev.id),
+            "details": f"Uploaded: {ev.title or ev.evidence_id}",
+            "timestamp": ev.created_at.isoformat() if ev.created_at else None,
+            "ip_address": None
+        })
+    
+    # Complaints filed
+    complaints_list = db.query(Complaint).filter(
+        Complaint.investigator_id == investigator_id
+    ).order_by(Complaint.created_at.desc()).limit(50).all()
+    
+    for comp in complaints_list:
+        activities.append({
+            "type": "complaint_filed",
+            "action": "Complaint Filed",
+            "entity_type": "complaint",
+            "entity_id": str(comp.id),
+            "details": f"Filed complaint for wallet: {comp.wallet_address}",
+            "timestamp": comp.created_at.isoformat() if comp.created_at else None,
+            "ip_address": comp.investigator_location_ip
+        })
+    
+    # Incident reports
+    reports_list = db.query(IncidentReport).filter(
+        IncidentReport.investigator_id == investigator_id
+    ).order_by(IncidentReport.created_at.desc()).limit(50).all()
+    
+    for rep in reports_list:
+        activities.append({
+            "type": "incident_report",
+            "action": "AI Report Generated",
+            "entity_type": "incident_report",
+            "entity_id": str(rep.id),
+            "details": f"Generated report for wallet: {rep.wallet_address} (Risk: {rep.risk_level})",
+            "timestamp": rep.created_at.isoformat() if rep.created_at else None,
+            "ip_address": None
+        })
+    
+    # Watchlist entries
+    watchlist_list = db.query(WatchlistWallet).filter(
+        WatchlistWallet.created_by == investigator_id
+    ).order_by(WatchlistWallet.created_at.desc()).limit(50).all()
+    
+    for wl in watchlist_list:
+        activities.append({
+            "type": "watchlist_add",
+            "action": "Added to Watchlist",
+            "entity_type": "watchlist",
+            "entity_id": str(wl.id),
+            "details": f"Added wallet to watchlist: {wl.wallet_address}",
+            "timestamp": wl.created_at.isoformat() if wl.created_at else None,
+            "ip_address": None
+        })
+    
+    # Convert audit logs to activity format
+    for log in audit_logs:
+        activities.append({
+            "type": "audit_log",
+            "action": log.action,
+            "entity_type": log.entity_type,
+            "entity_id": log.entity_id,
+            "details": log.details or "",
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "ip_address": log.ip_address
+        })
+    
+    # Sort by timestamp (most recent first)
+    activities.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    
+    # Apply pagination
+    total_count = len(activities)
+    paginated_activities = activities[skip:skip + limit]
+    
+    return {
+        "investigator": {
+            "id": investigator.id,
+            "email": investigator.email,
+            "full_name": investigator.full_name
+        },
+        "total_count": total_count,
+        "activities": paginated_activities
+    }
+
+
+@router.post("/bulk-action")
+async def bulk_investigator_action(
+    action: str,
+    investigator_ids: List[int],
+    db: Session = Depends(get_db)
+):
+    """Perform bulk actions on investigators"""
+    from app.db.models import User
+    
+    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    
+    results = []
+    
+    for inv_id in investigator_ids:
+        investigator = db.query(User).filter(User.id == inv_id).first()
+        
+        if not investigator:
+            results.append({"id": inv_id, "success": False, "message": "Investigator not found"})
+            continue
+        
+        if investigator.email.lower().strip() == superadmin_email:
+            results.append({"id": inv_id, "success": False, "message": "Cannot modify superadmin"})
+            continue
+        
+        try:
+            if action == "activate":
+                investigator.is_active = True
+                results.append({"id": inv_id, "success": True, "message": "Activated"})
+            elif action == "deactivate":
+                investigator.is_active = False
+                results.append({"id": inv_id, "success": True, "message": "Deactivated"})
+            else:
+                results.append({"id": inv_id, "success": False, "message": f"Unknown action: {action}"})
+        except Exception as e:
+            results.append({"id": inv_id, "success": False, "message": str(e)})
+    
+    db.commit()
+    
+    return {
+        "action": action,
+        "total": len(investigator_ids),
+        "results": results
+    }
+
+
+@router.get("/{investigator_id}/status")
+async def get_investigator_status(investigator_id: int, db: Session = Depends(get_db)):
+    """Get comprehensive status and health metrics for an investigator"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, and_
+    from app.db.models import User, AuditLog
+    
+    # Get the investigator
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    if not investigator:
+        raise HTTPException(status_code=404, detail="Investigator not found")
+    
+    if investigator.role != "investigator":
+        raise HTTPException(status_code=400, detail="User is not an investigator")
+    
+    now = datetime.utcnow()
+    
+    # Determine online/offline status (online if activity within last 15 minutes)
+    is_online = False
+    session_duration = None
+    if investigator.last_activity_at:
+        time_since_activity = now - investigator.last_activity_at
+        is_online = time_since_activity.total_seconds() < 900  # 15 minutes
+        
+        # Calculate session duration (time since last login)
+        if investigator.last_login_at:
+            session_duration = (now - investigator.last_login_at).total_seconds()
+    
+    # Calculate login frequency (logins in last 7 and 30 days)
+    seven_days_ago = now - timedelta(days=7)
+    thirty_days_ago = now - timedelta(days=30)
+    
+    # Count login events from audit logs
+    login_count_7d = db.query(func.count(AuditLog.id)).filter(
+        and_(
+            AuditLog.user_id == investigator_id,
+            AuditLog.action.ilike("%login%"),
+            AuditLog.timestamp >= seven_days_ago
+        )
+    ).scalar() or 0
+    
+    login_count_30d = db.query(func.count(AuditLog.id)).filter(
+        and_(
+            AuditLog.user_id == investigator_id,
+            AuditLog.action.ilike("%login%"),
+            AuditLog.timestamp >= thirty_days_ago
+        )
+    ).scalar() or 0
+    
+    # Calculate password age
+    password_age_days = None
+    if investigator.password_changed_at:
+        password_age = now - investigator.password_changed_at
+        password_age_days = password_age.days
+    elif investigator.created_at:
+        # If password_changed_at is not set, use created_at as fallback
+        password_age = now - investigator.created_at
+        password_age_days = password_age.days
+    
+    # Determine password health status
+    password_status = "good"
+    if password_age_days is not None:
+        if password_age_days > 90:
+            password_status = "expired"
+        elif password_age_days > 60:
+            password_status = "warning"
+    
+    # Calculate activity score (based on recent activity)
+    activity_score = 0
+    if investigator.last_activity_at:
+        hours_since_activity = (now - investigator.last_activity_at).total_seconds() / 3600
+        if hours_since_activity < 24:
+            activity_score = 100
+        elif hours_since_activity < 72:
+            activity_score = 75
+        elif hours_since_activity < 168:  # 7 days
+            activity_score = 50
+        elif hours_since_activity < 720:  # 30 days
+            activity_score = 25
+        else:
+            activity_score = 0
+    
+    return {
+        "investigator": {
+            "id": investigator.id,
+            "email": investigator.email,
+            "full_name": investigator.full_name,
+            "is_active": investigator.is_active,
+            "created_at": investigator.created_at.isoformat() if investigator.created_at else None
+        },
+        "status": {
+            "is_online": is_online,
+            "last_login_at": investigator.last_login_at.isoformat() if investigator.last_login_at else None,
+            "last_activity_at": investigator.last_activity_at.isoformat() if investigator.last_activity_at else None,
+            "session_duration_seconds": int(session_duration) if session_duration else None,
+            "session_duration_formatted": format_duration(session_duration) if session_duration else None
+        },
+        "health_metrics": {
+            "account_status": "active" if investigator.is_active else "inactive",
+            "password_age_days": password_age_days,
+            "password_status": password_status,
+            "two_factor_enabled": investigator.two_factor_enabled or False,
+            "activity_score": activity_score
+        },
+        "login_frequency": {
+            "last_7_days": login_count_7d,
+            "last_30_days": login_count_30d
+        },
+        "location": {
+            "city": investigator.location_city,
+            "country": investigator.location_country,
+            "latitude": investigator.location_latitude,
+            "longitude": investigator.location_longitude,
+            "ip_address": investigator.location_ip,
+            "last_updated": investigator.last_activity_at.isoformat() if investigator.last_activity_at else None
+        }
+    }
+
+
+def format_duration(seconds: float) -> str:
+    """Format duration in seconds to human-readable string"""
+    if seconds is None:
+        return "N/A"
+    
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"

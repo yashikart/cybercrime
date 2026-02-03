@@ -7,18 +7,51 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
+import bcrypt
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt directly to avoid passlib compatibility issues
+def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt"""
+    # Ensure password is a string and encode it
+    if not isinstance(password, str):
+        password = str(password)
+    
+    # Bcrypt has a 72-byte limit, so truncate if necessary
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    return pwd_context.hash(password)
+    try:
+        if not isinstance(plain_password, str):
+            plain_password = str(plain_password)
+        
+        # Ensure hashed_password is a string
+        if not isinstance(hashed_password, str):
+            hashed_password = str(hashed_password)
+        
+        # Try bcrypt first (direct)
+        password_bytes = plain_password.encode('utf-8')
+        if len(password_bytes) > 72:
+            password_bytes = password_bytes[:72]
+        
+        hashed_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception as e:
+        # Fallback to passlib if bcrypt fails
+        try:
+            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            return pwd_context.verify(plain_password, hashed_password)
+        except:
+            print(f"Password verification error: {e}")
+            return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

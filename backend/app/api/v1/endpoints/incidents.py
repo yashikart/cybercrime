@@ -5,19 +5,19 @@ Analyzes wallet addresses and generates fraud risk reports
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import sys
 import os
-from bson import ObjectId
+import json
 
 # Add synthetic_data_generator to path
 backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(0, backend_path)
 
 from app.db.database import get_db
-from app.db.mongodb import get_database
-from app.db.models_mongo import IncidentReportMongo
+from app.db.models import IncidentReport
 from app.api.v1.schemas import IncidentReportRequest, IncidentReportResponse
 from app.core.ai_service import generate_ai_conclusion, check_ai_available
 from synthetic_data_generator.generator import generate_wallet_transactions, random_wallet
@@ -229,8 +229,8 @@ async def analyze_wallet_incident(
     db: Session = Depends(get_db)
 ):
     """
-    Analyze a wallet address and generate comprehensive fraud risk report
-    Saves the report to MongoDB for persistence
+    Analyze a wallet address and generate comprehensive fraud risk report.
+    Saves the report to the SQL database for persistence.
     """
     try:
         wallet = request.wallet_address
@@ -306,6 +306,29 @@ async def analyze_wallet_incident(
                 risk_score, risk_level, pattern_type, detected_patterns
             )
         
+        # Build transaction details for frontend table
+        tx_details = []
+        for idx, t in enumerate(txns):
+            amount = float(t.get("amount", 0))
+            direction = "related"
+            if t.get("from") == wallet and t.get("to") != wallet:
+                direction = "outgoing"
+            elif t.get("to") == wallet and t.get("from") != wallet:
+                direction = "incoming"
+            timestamp = t.get("timestamp")
+            # Simple heuristic for "suspicious" transaction highlight
+            suspicious = amount >= max(total_in, total_out) * 0.4 or amount > 10000
+            tx_details.append({
+                "id": idx + 1,
+                "from_address": t.get("from", ""),
+                "to_address": t.get("to", ""),
+                "amount": amount,
+                "direction": direction,
+                "timestamp": timestamp,
+                "type": t.get("type", None),
+                "suspicious": suspicious,
+            })
+
         # Prepare response data
         response_data = IncidentReportResponse(
             wallet=wallet,
@@ -318,48 +341,53 @@ async def analyze_wallet_incident(
                 "tx_count": len(txns),
                 "unique_senders": unique_senders,
                 "unique_receivers": unique_receivers,
-                "pattern_type": pattern_type.replace("_", " ").title()
+                "pattern_type": pattern_type.replace("_", " ").title(),
+                # also embed transactions in summary so they persist in SQL
+                "transactions": tx_details,
             },
             graph_data=graph_data,
             timeline=timeline,
+            transactions=tx_details,
             system_conclusion=system_conclusion
         )
-        
-        # Save to MongoDB
+
+        # Save to SQL database (IncidentReport table)
         try:
-            mongo_db = get_database()
-            if mongo_db:
-                report_doc = {
-                    "wallet_address": wallet,
-                    "user_description": request.description,
-                    "risk_score": risk_score,
-                    "risk_level": risk_level,
-                    "detected_patterns": detected_patterns,
-                    "summary": {
-                        "total_in": total_in,
-                        "total_out": total_out,
-                        "tx_count": len(txns),
-                        "unique_senders": unique_senders,
-                        "unique_receivers": unique_receivers,
-                        "pattern_type": pattern_type.replace("_", " ").title()
-                    },
-                    "graph_data": graph_data,
-                    "timeline": timeline,
-                    "system_conclusion": system_conclusion,
-                    "status": "investigating",
-                    "notes": [],
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                }
-                
-                result = await mongo_db["incident_reports"].insert_one(report_doc)
-                # Add report ID to response
-                response_data.report_id = str(result.inserted_id)
-                return response_data
-        except Exception as mongo_error:
+            summary_obj = {
+                "total_in": total_in,
+                "total_out": total_out,
+                "tx_count": len(txns),
+                "unique_senders": unique_senders,
+                "unique_receivers": unique_receivers,
+                "pattern_type": pattern_type.replace("_", " ").title(),
+                "transactions": tx_details,
+            }
+
+            report = IncidentReport(
+                wallet_address=wallet,
+                user_description=request.description,
+                risk_score=risk_score,
+                risk_level=risk_level,
+                detected_patterns=json.dumps(detected_patterns),
+                summary=json.dumps(summary_obj),
+                graph_data=json.dumps(graph_data),
+                timeline=json.dumps(timeline),
+                system_conclusion=system_conclusion,
+                status="investigating",
+                notes=json.dumps([]),
+                investigator_id=request.investigator_id,
+            )
+
+            db.add(report)
+            db.commit()
+            db.refresh(report)
+
+            # Add report ID to response (as string for frontend)
+            response_data.report_id = str(report.id)
+        except Exception as db_error:
             # Log error but don't fail the request
-            print(f"Warning: Failed to save report to MongoDB: {mongo_error}")
-        
+            print(f"[WARN] Failed to save report to SQL database: {db_error}")
+
         return response_data
         
     except Exception as e:
@@ -371,71 +399,85 @@ async def get_incident_reports(
     skip: int = 0,
     limit: int = 20,
     wallet_address: Optional[str] = None,
+    investigator_id: Optional[int] = None,
     risk_level: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    pattern_type: Optional[str] = None,  # Filter by pattern: "fraud", "normal", "money_laundering", etc.
+    db: Session = Depends(get_db),
 ):
     """
-    Get list of saved incident reports with filtering
+    Get list of saved incident reports with filtering (from SQL database).
+    
+    pattern_type options:
+    - "fraud": Fraud wallets (fraud, money_laundering, ponzi, ransomware)
+    - "normal": Normal wallets
+    - Specific: "fraud", "money_laundering", "ponzi", "ransomware", "normal"
     """
     try:
-        mongo_db = get_database()
-        if not mongo_db:
-            raise HTTPException(status_code=503, detail="MongoDB not available")
-        
-        # Build query
-        query = {}
+        query = db.query(IncidentReport)
+
+        if investigator_id is not None:
+            query = query.filter(IncidentReport.investigator_id == investigator_id)
+
         if wallet_address:
-            query["wallet_address"] = {"$regex": wallet_address, "$options": "i"}
-        if risk_level:
-            query["risk_level"] = risk_level.upper()
-        if status:
-            query["status"] = status.lower()
-        
-        # Fetch reports
-        cursor = mongo_db["incident_reports"].find(query).sort("created_at", -1).skip(skip).limit(limit)
-        reports = await cursor.to_list(length=limit)
-        
-        # Convert ObjectId to string
-        for report in reports:
-            report["_id"] = str(report["_id"])
-            if "created_at" in report and isinstance(report["created_at"], datetime):
-                report["created_at"] = report["created_at"].isoformat()
-            if "updated_at" in report and isinstance(report["updated_at"], datetime):
-                report["updated_at"] = report["updated_at"].isoformat()
-        
-        return reports
-        
+            # Case-insensitive match
+            like_pattern = f"%{wallet_address}%"
+            query = query.filter(IncidentReport.wallet_address.ilike(like_pattern))
+
+        if risk_level and risk_level != "all":
+            query = query.filter(IncidentReport.risk_level == risk_level.upper())
+
+        if status and status != "all":
+            query = query.filter(IncidentReport.status == status.lower())
+
+        # Filter by pattern type (stored in summary JSON)
+        if pattern_type and pattern_type != "all":
+            pattern_type_lower = pattern_type.lower()
+            
+            # Special case: "fraud" means all fraud-related patterns
+            if pattern_type_lower == "fraud":
+                fraud_patterns = ["fraud", "money_laundering", "ponzi", "ransomware"]
+                # Filter by checking summary JSON for pattern_type
+                pattern_filters = []
+                for pattern in fraud_patterns:
+                    pattern_filters.append(
+                        IncidentReport.summary.ilike(f'%"pattern_type": "{pattern.title()}"%')
+                    )
+                query = query.filter(or_(*pattern_filters))
+            else:
+                # Specific pattern type
+                pattern_title = pattern_type_lower.replace("_", " ").title()
+                query = query.filter(IncidentReport.summary.ilike(f'%"pattern_type": "{pattern_title}"%'))
+
+        query = query.order_by(IncidentReport.created_at.desc())
+        reports = query.offset(skip).limit(limit).all()
+
+        return [r.to_dict() for r in reports]
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching reports: {str(e)}")
+        # Log error but return empty list to prevent frontend crashes
+        print(f"[ERROR] Error fetching reports from SQL: {str(e)}")
+        return []
 
 
 @router.get("/reports/{report_id}", response_model=Dict)
-async def get_incident_report(report_id: str):
+async def get_incident_report(report_id: str, db: Session = Depends(get_db)):
     """
-    Get a specific incident report by ID
+    Get a specific incident report by ID from SQL database.
     """
     try:
-        mongo_db = get_database()
-        if not mongo_db:
-            raise HTTPException(status_code=503, detail="MongoDB not available")
-        
-        if not ObjectId.is_valid(report_id):
+        try:
+            report_int_id = int(report_id)
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid report ID")
-        
-        report = await mongo_db["incident_reports"].find_one({"_id": ObjectId(report_id)})
-        
+
+        report = db.query(IncidentReport).filter(IncidentReport.id == report_int_id).first()
+
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
-        
-        # Convert ObjectId to string
-        report["_id"] = str(report["_id"])
-        if "created_at" in report and isinstance(report["created_at"], datetime):
-            report["created_at"] = report["created_at"].isoformat()
-        if "updated_at" in report and isinstance(report["updated_at"], datetime):
-            report["updated_at"] = report["updated_at"].isoformat()
-        
-        return report
-        
+
+        return report.to_dict()
+
     except HTTPException:
         raise
     except Exception as e:
@@ -443,32 +485,32 @@ async def get_incident_report(report_id: str):
 
 
 @router.patch("/reports/{report_id}/status")
-async def update_report_status(report_id: str, status: str):
+async def update_report_status(report_id: str, status: str, db: Session = Depends(get_db)):
     """
-    Update the status of an incident report
+    Update the status of an incident report in SQL database.
     """
     try:
-        mongo_db = get_database()
-        if not mongo_db:
-            raise HTTPException(status_code=503, detail="MongoDB not available")
-        
-        if not ObjectId.is_valid(report_id):
+        try:
+            report_int_id = int(report_id)
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid report ID")
-        
+
         valid_statuses = ["investigating", "resolved", "closed", "escalated"]
         if status.lower() not in valid_statuses:
             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
-        
-        result = await mongo_db["incident_reports"].update_one(
-            {"_id": ObjectId(report_id)},
-            {"$set": {"status": status.lower(), "updated_at": datetime.utcnow()}}
-        )
-        
-        if result.matched_count == 0:
+
+        report = db.query(IncidentReport).filter(IncidentReport.id == report_int_id).first()
+        if not report:
             raise HTTPException(status_code=404, detail="Report not found")
-        
-        return {"message": "Status updated successfully", "report_id": report_id, "status": status.lower()}
-        
+
+        report.status = status.lower()
+        report.updated_at = datetime.utcnow()
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        return {"message": "Status updated successfully", "report_id": report_id, "status": report.status}
+
     except HTTPException:
         raise
     except Exception as e:
@@ -476,37 +518,40 @@ async def update_report_status(report_id: str, status: str):
 
 
 @router.post("/reports/{report_id}/notes")
-async def add_report_note(report_id: str, note: str, author: str = "Investigator"):
+async def add_report_note(report_id: str, note: str, author: str = "Investigator", db: Session = Depends(get_db)):
     """
-    Add a note to an incident report
+    Add a note to an incident report in SQL database.
     """
     try:
-        mongo_db = get_database()
-        if not mongo_db:
-            raise HTTPException(status_code=503, detail="MongoDB not available")
-        
-        if not ObjectId.is_valid(report_id):
+        try:
+            report_int_id = int(report_id)
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid report ID")
-        
+
+        report = db.query(IncidentReport).filter(IncidentReport.id == report_int_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        try:
+            notes = json.loads(report.notes or "[]")
+        except Exception:
+            notes = []
+
         note_entry = {
             "note": note,
             "author": author,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
-        
-        result = await mongo_db["incident_reports"].update_one(
-            {"_id": ObjectId(report_id)},
-            {
-                "$push": {"notes": note_entry},
-                "$set": {"updated_at": datetime.utcnow()}
-            }
-        )
-        
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Report not found")
-        
+        notes.append(note_entry)
+
+        report.notes = json.dumps(notes)
+        report.updated_at = datetime.utcnow()
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
         return {"message": "Note added successfully", "note": note_entry}
-        
+
     except HTTPException:
         raise
     except Exception as e:
