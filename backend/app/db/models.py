@@ -28,6 +28,7 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
     last_activity_at = Column(DateTime, nullable=True)
     password_changed_at = Column(DateTime, nullable=True)
+    last_notification_read_at = Column(DateTime, nullable=True)  # Track when user last cleared notifications
     two_factor_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     

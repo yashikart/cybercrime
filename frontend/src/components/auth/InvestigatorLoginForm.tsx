@@ -275,34 +275,66 @@ function RequestAccessButton() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Validate form data
+    if (!formData.full_name.trim() || !formData.email.trim()) {
+      setSubmitStatus("error");
+      setErrorMessage("Please fill in all required fields.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitStatus("idle");
     setErrorMessage("");
 
     try {
+      console.log("Submitting access request:", formData);
+      
       const response = await fetch("http://localhost:3000/api/v1/access-requests/request", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          reason: formData.reason.trim() || null,
+        }),
       });
+
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        // If response is not JSON, read as text
+        const textResponse = await response.text();
+        console.error("Non-JSON response:", textResponse);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
 
       if (response.ok) {
         setSubmitStatus("success");
         setFormData({ full_name: "", email: "", reason: "" });
+        console.log("Access request submitted successfully:", responseData);
+        
+        // Show success message for 3 seconds before closing
         setTimeout(() => {
           setShowModal(false);
           setSubmitStatus("idle");
-        }, 2000);
+          setErrorMessage("");
+        }, 3000);
       } else {
-        const error = await response.json();
         setSubmitStatus("error");
-        setErrorMessage(error.detail || "Failed to submit request");
+        const errorMsg = responseData.detail || responseData.message || `Failed to submit request (${response.status})`;
+        setErrorMessage(errorMsg);
+        console.error("Error submitting request:", responseData);
       }
-    } catch (error) {
+    } catch (error: any) {
       setSubmitStatus("error");
-      setErrorMessage("Network error. Please try again.");
+      const errorMsg = error.message || "Network error. Please check your connection and try again.";
+      setErrorMessage(errorMsg);
+      console.error("Network error:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -311,8 +343,14 @@ function RequestAccessButton() {
   return (
     <>
       <button
-        onClick={() => setShowModal(true)}
-        className="group/create relative w-full px-6 py-3 bg-gradient-to-r from-gray-900/60 to-black/60 border border-emerald-500/30 hover:border-emerald-400/60 rounded-lg transition-all duration-300 overflow-hidden"
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log("Request access button clicked");
+          setShowModal(true);
+        }}
+        className="group/create relative w-full px-6 py-3 bg-gradient-to-r from-gray-900/60 to-black/60 border border-emerald-500/30 hover:border-emerald-400/60 rounded-lg transition-all duration-300 overflow-hidden cursor-pointer"
       >
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 opacity-0 group-hover/create:opacity-100 transition-opacity"></div>
         <span className="relative flex items-center justify-center gap-2 text-emerald-400 font-mono text-sm">

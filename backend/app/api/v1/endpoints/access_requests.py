@@ -73,6 +73,32 @@ async def create_access_request(
     db.commit()
     db.refresh(db_request)
     
+    # Create a notification/message for superadmin about the new request
+    try:
+        from app.db.models import Message
+        from datetime import datetime
+        
+        # Get superadmin user
+        superadmin = db.query(User).filter(User.role == "superadmin").first()
+        if superadmin:
+            # Create a message/notification for superadmin
+            notification = Message(
+                sender_id=None,  # System-generated
+                recipient_id=superadmin.id,
+                message_type="notification",
+                subject=f"New Investigator Access Request: {request.full_name}",
+                content=f"A new investigator access request has been submitted.\n\nName: {request.full_name}\nEmail: {request.email}\nReason: {request.reason or 'No reason provided'}\n\nRequest ID: {db_request.id}\n\nPlease review this request in the Access Requests section.",
+                priority="high",
+                is_broadcast=False,
+                is_read=False
+            )
+            db.add(notification)
+            db.commit()
+    except Exception as e:
+        # Don't fail the request creation if notification fails
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to create notification for access request: {e}")
+    
     return db_request.to_dict()
 
 

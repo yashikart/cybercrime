@@ -93,6 +93,7 @@ def migrate_database():
                     ("last_login_at", "DATETIME"),
                     ("last_activity_at", "DATETIME"),
                     ("password_changed_at", "DATETIME"),
+                    ("last_notification_read_at", "DATETIME"),
                     ("two_factor_enabled", "BOOLEAN"),
                     ("availability_status", "VARCHAR"),
                     ("status_updated_at", "DATETIME"),

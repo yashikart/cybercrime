@@ -20,6 +20,7 @@ from app.db.database import get_db
 from app.db.models import IncidentReport
 from app.api.v1.schemas import IncidentReportRequest, IncidentReportResponse
 from app.core.ai_service import generate_ai_conclusion, check_ai_available
+from app.core.ai_orchestrator import call_incident_orchestrator
 from synthetic_data_generator.generator import generate_wallet_transactions, random_wallet
 from synthetic_data_generator.suspicious_patterns import (
     calculate_risk_score,
@@ -282,29 +283,72 @@ async def analyze_wallet_incident(
         # Generate timeline
         timeline = generate_timeline(txns)
         
-        # Generate system conclusion using AI (OpenRouter) or fallback to template
+        # Optionally delegate to external AI orchestrator (e.g. Primary_Bucket_Owner)
+        orchestrator_result: Optional[Dict[str, Any]] = None
         try:
-            system_conclusion = generate_ai_conclusion(
-                wallet=wallet,
-                risk_score=risk_score,
-                risk_level=risk_level,
-                pattern_type=pattern_type,
-                detected_patterns=detected_patterns,
-                summary={
+            orchestrator_payload = {
+                "wallet": wallet,
+                "description": request.description,
+                "transactions": txns,
+                "base_metrics": {
                     "total_in": total_in,
                     "total_out": total_out,
                     "tx_count": len(txns),
                     "unique_senders": unique_senders,
                     "unique_receivers": unique_receivers,
                 },
-                user_description=request.description,
-                fallback_to_template=True
-            )
-        except Exception as e:
-            # Fallback to template if AI fails
-            system_conclusion = generate_system_conclusion(
-                risk_score, risk_level, pattern_type, detected_patterns
-            )
+                "base_risk": {
+                    "risk_score": risk_score,
+                    "risk_level": risk_level,
+                    "pattern_type": pattern_type,
+                    "detected_patterns": detected_patterns,
+                },
+            }
+            orchestrator_result = call_incident_orchestrator(orchestrator_payload)
+        except Exception:
+            orchestrator_result = None
+
+        # Generate system conclusion using orchestrator if available, else OpenRouter/template
+        if orchestrator_result and isinstance(orchestrator_result, dict) and orchestrator_result.get("system_conclusion"):
+            # Optionally override risk if orchestrator provides it
+            try:
+                if "risk_score" in orchestrator_result:
+                    risk_score = float(orchestrator_result["risk_score"])
+                    risk_level = get_risk_level(risk_score)
+                if "risk_level" in orchestrator_result:
+                    risk_level = orchestrator_result["risk_level"]
+                extra_patterns = orchestrator_result.get("detected_patterns") or []
+                if isinstance(extra_patterns, list):
+                    # Merge and deduplicate patterns
+                    detected_patterns = list({*detected_patterns, *[str(p) for p in extra_patterns]})
+            except Exception:
+                # If parsing fails, keep original risk values
+                pass
+
+            system_conclusion = str(orchestrator_result["system_conclusion"])
+        else:
+            try:
+                system_conclusion = generate_ai_conclusion(
+                    wallet=wallet,
+                    risk_score=risk_score,
+                    risk_level=risk_level,
+                    pattern_type=pattern_type,
+                    detected_patterns=detected_patterns,
+                    summary={
+                        "total_in": total_in,
+                        "total_out": total_out,
+                        "tx_count": len(txns),
+                        "unique_senders": unique_senders,
+                        "unique_receivers": unique_receivers,
+                    },
+                    user_description=request.description,
+                    fallback_to_template=True,
+                )
+            except Exception:
+                # Fallback to template if AI fails
+                system_conclusion = generate_system_conclusion(
+                    risk_score, risk_level, pattern_type, detected_patterns
+                )
         
         # Build transaction details for frontend table
         tx_details = []

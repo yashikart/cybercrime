@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # AI (OpenRouter)
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL: str = "qwen/qwen-2.5-72b-instruct"  # Free model
+
+    # External AI Orchestrator (e.g. Primary_Bucket_Owner)
+    # If configured, certain AI flows can delegate to this orchestrator service.
+    AI_ORCHESTRATOR_INCIDENT_URL: Optional[str] = None  # Full URL for incident-analysis basket endpoint
+    AI_ORCHESTRATOR_API_KEY: Optional[str] = None       # Optional auth key/token for the orchestrator
     
     # Email Configuration (SMTP - Brevo)
     MAIL_SERVER: str = "smtp-relay.brevo.com"

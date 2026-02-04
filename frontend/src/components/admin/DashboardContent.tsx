@@ -1,4 +1,4 @@
-import { Activity, Users, AlertTriangle, FolderOpen, TrendingUp, Shield, Database, Zap, MapPin, Bot, Filter, Trash2, Eye, Lock, Unlock, FileWarning, PlayCircle, ChevronDown, FileText, Clock, RefreshCw, Loader2, Bell, Brain } from "lucide-react";
+import { Activity, Users, AlertTriangle, FolderOpen, TrendingUp, Shield, Database, Zap, MapPin, Bot, Filter, Trash2, Eye, Lock, Unlock, FileWarning, PlayCircle, ChevronDown, FileText, Clock, RefreshCw, Loader2, Bell, Brain, CheckCheck } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -160,7 +160,14 @@ export function DashboardContent() {
 
       // Dashboard-level notifications
       try {
-        const notifRes = await fetch("http://localhost:3000/api/v1/dashboard/notifications?limit=50");
+        const adminToken = localStorage.getItem("admin_token");
+        const headers: HeadersInit = {};
+        if (adminToken) {
+          headers["Authorization"] = `Bearer ${adminToken}`;
+        }
+        const notifRes = await fetch("http://localhost:3000/api/v1/dashboard/notifications?limit=50", {
+          headers
+        });
         if (notifRes.ok) {
           const notifData = await notifRes.json();
           setNotifications(notifData.notifications || []);
@@ -528,9 +535,9 @@ export function DashboardContent() {
               className="relative inline-flex items-center justify-center w-9 h-9 rounded-full border border-emerald-500/40 bg-black/60 text-emerald-400 hover:bg-emerald-900/60 transition-all"
             >
               <Bell className="w-4 h-4" />
-              {notifications.length > 0 && (
+              {notifications.filter(n => !n.read).length > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[18px] px-1 rounded-full bg-red-500 text-[10px] font-mono text-white flex items-center justify-center">
-                  {notifications.length > 9 ? "9+" : notifications.length}
+                  {notifications.filter(n => !n.read).length > 9 ? "9+" : notifications.filter(n => !n.read).length}
                 </span>
               )}
             </button>
@@ -559,9 +566,40 @@ export function DashboardContent() {
               <Bell className="w-4 h-4 text-emerald-400" />
               <h2 className="text-emerald-400 font-mono text-sm">Notification Center</h2>
             </div>
-            <span className="text-gray-500 font-mono text-xs">
-              {notifications.length} notification{notifications.length === 1 ? "" : "s"}
-            </span>
+            <div className="flex items-center gap-3">
+              {notifications.length > 0 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const adminToken = localStorage.getItem("admin_token");
+                      // Update local state to mark all as read
+                      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                      
+                      // Call backend to mark as read
+                      if (adminToken) {
+                        await fetch("http://localhost:3000/api/v1/dashboard/notifications/mark-all-read", {
+                          method: "POST",
+                          headers: {
+                            "Authorization": `Bearer ${adminToken}`
+                          }
+                        });
+                        // Refresh to ensure server sync
+                        fetchDashboardData();
+                      }
+                    } catch (error) {
+                      console.error("Error marking all as read:", error);
+                    }
+                  }}
+                  className="text-xs font-mono text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1 px-2 py-1 rounded border border-cyan-500/30 hover:border-cyan-500/50 bg-cyan-950/20 hover:bg-cyan-950/40"
+                >
+                  <CheckCheck className="w-3 h-3" />
+                  Mark All Read
+                </button>
+              )}
+              <span className="text-gray-500 font-mono text-xs">
+                {notifications.length} notification{notifications.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {notifications.length === 0 ? (
@@ -586,7 +624,11 @@ export function DashboardContent() {
                 return (
                   <div
                     key={notif.id}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-black/40 border border-emerald-500/10 hover:border-emerald-500/40 transition-all"
+                    className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${
+                      notif.read 
+                        ? "bg-black/20 border-emerald-500/5 opacity-60" 
+                        : "bg-black/40 border-emerald-500/10 hover:border-emerald-500/40"
+                    }`}
                   >
                     <div
                       className={`p-2 rounded-lg bg-${sevColor}-500/10 border border-${sevColor}-500/40`}
