@@ -14,37 +14,36 @@ class CORSEnvSettingsSource(EnvSettingsSource):
     def __call__(self) -> dict[str, Any]:
         d: dict[str, Any] = {}
         
-        # Handle CORS_ORIGINS first, before Pydantic tries to parse it as JSON
-        cors_env = os.getenv('CORS_ORIGINS')
-        if cors_env:
-            cors_env = cors_env.strip()
-            if cors_env:
-                # Try parsing as JSON first
-                try:
-                    parsed = json.loads(cors_env)
-                    if isinstance(parsed, list):
-                        d['CORS_ORIGINS'] = parsed
-                    else:
-                        # If not a list, treat as comma-separated
-                        d['CORS_ORIGINS'] = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
-                except (json.JSONDecodeError, ValueError, TypeError):
-                    # If not JSON, treat as comma-separated string
-                    d['CORS_ORIGINS'] = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
-        
-        # Temporarily remove CORS_ORIGINS from env to prevent super() from trying to parse it
-        cors_backup = os.environ.pop('CORS_ORIGINS', None)
-        try:
-            # Get other env settings
-            other_settings = super().__call__()
-            d.update(other_settings)
-        finally:
-            # Restore CORS_ORIGINS to env
-            if cors_backup is not None:
-                os.environ['CORS_ORIGINS'] = cors_backup
-        
-        # Ensure our CORS_ORIGINS value is used
-        if 'CORS_ORIGINS' in d:
-            pass  # Already set above
+        # Read all environment variables manually to avoid super() parsing CORS_ORIGINS as JSON
+        for field_name, field_info in self.settings_cls.model_fields.items():
+            # Build environment variable name
+            env_name = self.env_prefix + field_name if self.env_prefix else field_name
+            
+            if field_name == 'CORS_ORIGINS':
+                # Handle CORS_ORIGINS specially
+                cors_env = os.getenv(env_name)
+                if cors_env:
+                    cors_env = cors_env.strip()
+                    if cors_env:
+                        # Try parsing as JSON first
+                        try:
+                            parsed = json.loads(cors_env)
+                            if isinstance(parsed, list):
+                                d[field_name] = parsed
+                            else:
+                                # If not a list, treat as comma-separated
+                                d[field_name] = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
+                        except (json.JSONDecodeError, ValueError, TypeError):
+                            # If not JSON, treat as comma-separated string
+                            origins = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
+                            if origins:
+                                d[field_name] = origins
+                # If not set, will use default value
+            else:
+                # Handle other fields normally
+                env_val = os.getenv(env_name)
+                if env_val is not None:
+                    d[field_name] = env_val
         
         return d
 
