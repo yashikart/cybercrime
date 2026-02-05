@@ -2,6 +2,7 @@
 Application configuration settings
 """
 
+import json
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List, Optional
@@ -26,6 +27,19 @@ class Settings(BaseSettings):
                 return True
             elif v_upper in ("FALSE", "0", "NO", "OFF", "WARN"):
                 return False
+        return v
+    
+    @field_validator('CORS_ORIGINS', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Handle CORS_ORIGINS as comma-separated string or JSON array"""
+        if isinstance(v, str):
+            # Try parsing as JSON first
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                # If not JSON, treat as comma-separated string
+                return [origin.strip() for origin in v.split(',') if origin.strip()]
         return v
     
     # CORS

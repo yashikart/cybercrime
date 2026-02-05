@@ -48,11 +48,13 @@ This guide will help you deploy your Cybercrime Investigation Dashboard on Rende
    SECRET_KEY=<generate-a-random-secret-key-here>
    DEBUG=False
    PORT=10000
-   CORS_ORIGINS=https://cybercrime-frontend.onrender.com,http://localhost:5173
+   CORS_ORIGINS=https://cybercrime-frontend.onrender.com,https://cybercrime-backend.onrender.com
    EVIDENCE_STORAGE_PATH=/opt/render/project/src/backend/evidence_storage
    BREVO_API_KEY=<your-brevo-api-key-if-using>
    OPENROUTER_API_KEY=<your-openrouter-key-if-using>
    ```
+   
+   **Note**: `CORS_ORIGINS` accepts comma-separated URLs (no spaces after commas). The backend will automatically parse it into a list.
 
 5. Click **"Create Web Service"**
 
@@ -288,7 +290,13 @@ After frontend deployment, update `VITE_API_URL`:
    - Go to backend service → **Environment** → Add `PYTHON_VERSION=3.12.7`
    - Save and redeploy
 
-2. **Backend won't start**:
+2. **Backend fails with "error parsing value for field CORS_ORIGINS"**:
+   - **Solution**: Ensure `CORS_ORIGINS` is set as comma-separated URLs without spaces: `url1,url2,url3`
+   - Example: `https://cybercrime-frontend.onrender.com,https://cybercrime-backend.onrender.com`
+   - The backend now automatically parses comma-separated strings (or JSON arrays)
+   - Make sure there are no spaces after commas
+
+3. **Backend won't start**:
    - Check logs in Render dashboard → **Logs** tab
    - Verify `DATABASE_URL` is correct (use Internal Database URL)
    - Ensure all required environment variables are set
