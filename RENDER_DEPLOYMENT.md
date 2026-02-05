@@ -70,11 +70,14 @@ After backend deployment, update the `CORS_ORIGINS` environment variable:
 
 ## Step 4: Update Frontend API Configuration
 
-**IMPORTANT**: Your frontend currently uses hardcoded `http://localhost:3000` URLs. You need to update them to use environment variables.
+**IMPORTANT**: Your frontend currently uses hardcoded `http://localhost:3000` URLs. You MUST update them before deploying to Render.
 
-### Option 1: Create an API Utility (Recommended)
+### Step-by-Step Instructions:
 
-Create `frontend/src/lib/api.ts`:
+#### 1. Create API Utility File
+
+Create `frontend/src/lib/api.ts` with this content:
+
 ```typescript
 // API base URL - uses environment variable in production, localhost in development
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
@@ -83,32 +86,128 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:30
 export const apiUrl = (path: string) => {
   // Remove leading slash if present
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  return `${API_BASE_URL}/${cleanPath}`;
+  // Ensure API_BASE_URL doesn't have trailing slash
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  return `${baseUrl}/${cleanPath}`;
 };
 ```
 
-Then update your fetch calls from:
-```typescript
-fetch("http://localhost:3000/api/v1/complaints/")
-```
+#### 2. Find All Hardcoded URLs
 
-To:
+Your frontend has many files with hardcoded URLs. Here are the main files that need updating:
+
+**Files to update:**
+- `frontend/src/components/admin/ComplaintsViewContent.tsx`
+- `frontend/src/components/admin/DashboardContent.tsx`
+- `frontend/src/components/admin/ManualInvestigatorContent.tsx`
+- `frontend/src/components/admin/AccessRequestsContent.tsx`
+- `frontend/src/components/admin/AIFraudDetectionContent.tsx`
+- `frontend/src/components/admin/RLEngineContent.tsx`
+- `frontend/src/components/admin/WalletFraudAnalysis.tsx`
+- `frontend/src/components/admin/FraudDetectionContent.tsx`
+- `frontend/src/components/admin/InvestigatorActivityContent.tsx`
+- `frontend/src/components/admin/InvestigatorCommunicationContent.tsx`
+- `frontend/src/components/admin/InvestigatorStatusContent.tsx`
+- `frontend/src/components/admin/EvidenceLibraryContent.tsx`
+- `frontend/src/components/admin/EscalationsContent.tsx`
+- `frontend/src/components/investigator/InvestigatorDashboard.tsx`
+- `frontend/src/components/auth/InvestigatorLoginForm.tsx`
+
+#### 3. Update Each File
+
+For each file, do the following:
+
+**a) Add import at the top:**
 ```typescript
 import { apiUrl } from '@/lib/api';
-fetch(apiUrl("complaints/"))
 ```
 
-### Option 2: Quick Fix (Temporary)
+**b) Replace hardcoded URLs:**
 
-For a quick deployment, you can use a global variable. Add to `frontend/src/main.tsx`:
+**Before:**
 ```typescript
-// Set API URL from environment variable
-(window as any).API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+fetch("http://localhost:3000/api/v1/complaints/")
+fetch(`http://localhost:3000/api/v1/investigators/${id}`)
 ```
 
-Then create a simple helper and update fetch calls accordingly.
+**After:**
+```typescript
+fetch(apiUrl("complaints/"))
+fetch(apiUrl(`investigators/${id}`))
+```
 
-**Note**: You'll need to update all API calls in your frontend components. Search for `"http://localhost:3000"` and replace with the environment variable approach.
+**c) For URLs with query parameters:**
+```typescript
+// Before:
+fetch(`http://localhost:3000/api/v1/complaints/?status=${status}`)
+
+// After:
+fetch(apiUrl(`complaints/?status=${status}`))
+```
+
+#### 4. Quick Find & Replace (Using VS Code or similar)
+
+1. Open VS Code Find & Replace (Ctrl+Shift+H / Cmd+Shift+H)
+2. Enable regex mode (.* icon)
+3. Find: `"http://localhost:3000/api/v1/(.*?)"`
+4. Replace: `apiUrl("$1")`
+5. **Important**: Review each replacement manually to ensure correctness
+
+#### 5. Test Locally
+
+After making changes:
+1. Set `VITE_API_URL=http://localhost:3000/api/v1` in your `.env` file (optional, defaults to localhost)
+2. Run `npm run dev` in the frontend directory
+3. Test that all API calls still work
+4. Commit and push changes
+
+#### 6. Alternative: Automated Script (Advanced)
+
+If you have many files, you can use a script. Create `update-api-urls.js` in project root:
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+const glob = require('glob');
+
+const files = glob.sync('frontend/src/**/*.{ts,tsx}');
+
+files.forEach(file => {
+  let content = fs.readFileSync(file, 'utf8');
+  
+  // Check if file already imports apiUrl
+  if (content.includes("from '@/lib/api'") || content.includes('apiUrl')) {
+    return; // Skip if already updated
+  }
+  
+  // Replace http://localhost:3000/api/v1/... with apiUrl(...)
+  const updated = content.replace(
+    /"http:\/\/localhost:3000\/api\/v1\/([^"]+)"/g,
+    'apiUrl("$1")'
+  );
+  
+  if (updated !== content) {
+    // Add import if not present
+    if (!updated.includes("import { apiUrl }")) {
+      const importLine = "import { apiUrl } from '@/lib/api';";
+      // Add after other imports
+      updated = updated.replace(
+        /(import\s+.*?from\s+['"][^'"]+['"];?\s*\n)+/,
+        `$&${importLine}\n`
+      );
+    }
+    fs.writeFileSync(file, updated);
+    console.log(`Updated: ${file}`);
+  }
+});
+```
+
+**Note**: Review all changes manually before committing!
+
+### What Happens After Deployment?
+
+- **Development**: Uses `http://localhost:3000/api/v1` (default)
+- **Production (Render)**: Uses `VITE_API_URL` environment variable you set in Step 5
 
 ## Step 5: Deploy Frontend Service
 

@@ -3,6 +3,7 @@ import { Phone, MapPin, Calendar, Search, Filter, FileText, AlertCircle, CheckCi
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/api";
 
 interface Complaint {
   id: number;
@@ -49,7 +50,7 @@ export function ComplaintsViewContent() {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/complaints/");
+      const response = await fetch(apiUrl("complaints/"));
       if (response.ok) {
         const data = await response.json();
         setComplaints(data);
@@ -63,7 +64,7 @@ export function ComplaintsViewContent() {
 
   const fetchInvestigators = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/investigators");
+      const response = await fetch(apiUrl("investigators/investigators"));
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
