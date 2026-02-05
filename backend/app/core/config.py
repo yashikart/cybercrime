@@ -3,9 +3,50 @@ Application configuration settings
 """
 
 import json
-from pydantic_settings import BaseSettings
-from pydantic import field_validator, model_validator
+import os
+from pydantic_settings import BaseSettings, SettingsConfigDict, EnvSettingsSource
+from pydantic import field_validator
 from typing import List, Optional, Any
+
+
+class CORSEnvSettingsSource(EnvSettingsSource):
+    """Custom settings source that handles CORS_ORIGINS specially"""
+    def __call__(self) -> dict[str, Any]:
+        d: dict[str, Any] = {}
+        
+        # Handle CORS_ORIGINS first, before Pydantic tries to parse it as JSON
+        cors_env = os.getenv('CORS_ORIGINS')
+        if cors_env:
+            cors_env = cors_env.strip()
+            if cors_env:
+                # Try parsing as JSON first
+                try:
+                    parsed = json.loads(cors_env)
+                    if isinstance(parsed, list):
+                        d['CORS_ORIGINS'] = parsed
+                    else:
+                        # If not a list, treat as comma-separated
+                        d['CORS_ORIGINS'] = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    # If not JSON, treat as comma-separated string
+                    d['CORS_ORIGINS'] = [origin.strip() for origin in cors_env.split(',') if origin.strip()]
+        
+        # Temporarily remove CORS_ORIGINS from env to prevent super() from trying to parse it
+        cors_backup = os.environ.pop('CORS_ORIGINS', None)
+        try:
+            # Get other env settings
+            other_settings = super().__call__()
+            d.update(other_settings)
+        finally:
+            # Restore CORS_ORIGINS to env
+            if cors_backup is not None:
+                os.environ['CORS_ORIGINS'] = cors_backup
+        
+        # Ensure our CORS_ORIGINS value is used
+        if 'CORS_ORIGINS' in d:
+            pass  # Already set above
+        
+        return d
 
 
 class Settings(BaseSettings):
@@ -28,52 +69,6 @@ class Settings(BaseSettings):
             elif v_upper in ("FALSE", "0", "NO", "OFF", "WARN"):
                 return False
         return v
-    
-    @model_validator(mode='before')
-    @classmethod
-    def parse_cors_origins_before(cls, data: Any) -> Any:
-        """Handle CORS_ORIGINS as comma-separated string before field parsing"""
-        if not isinstance(data, dict):
-            return data
-            
-        # Check for CORS_ORIGINS in environment variables (uppercase)
-        cors_key = 'CORS_ORIGINS'
-        if cors_key not in data:
-            return data
-            
-        cors_value = data[cors_key]
-        
-        # Skip if already a list
-        if isinstance(cors_value, list):
-            return data
-        
-        # Handle string values
-        if isinstance(cors_value, str):
-            cors_value = cors_value.strip()
-            
-            # Empty string - remove to use default
-            if not cors_value:
-                del data[cors_key]
-                return data
-            
-            # Try parsing as JSON first
-            try:
-                parsed = json.loads(cors_value)
-                if isinstance(parsed, list):
-                    data[cors_key] = parsed
-                    return data
-            except (json.JSONDecodeError, ValueError, TypeError):
-                pass
-            
-            # If not JSON, treat as comma-separated string
-            origins = [origin.strip() for origin in cors_value.split(',') if origin.strip()]
-            if origins:
-                data[cors_key] = origins
-            else:
-                # Invalid format - remove to use default
-                del data[cors_key]
-        
-        return data
     
     # CORS
     CORS_ORIGINS: List[str] = [
@@ -129,10 +124,28 @@ class Settings(BaseSettings):
     # the app will use the HTTPS API instead of SMTP to send emails.
     BREVO_API_KEY: Optional[str] = None
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"  # Ignore extra fields from .env that aren't in the model
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
+    
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        """Use custom env settings source for CORS_ORIGINS"""
+        return (
+            init_settings,
+            CORSEnvSettingsSource(settings_cls=settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
         
 
 
