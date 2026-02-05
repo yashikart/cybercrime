@@ -4,8 +4,8 @@ Application configuration settings
 
 import json
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
-from typing import List, Optional
+from pydantic import field_validator, model_validator
+from typing import List, Optional, Any
 
 
 class Settings(BaseSettings):
@@ -29,18 +29,51 @@ class Settings(BaseSettings):
                 return False
         return v
     
-    @field_validator('CORS_ORIGINS', mode='before')
+    @model_validator(mode='before')
     @classmethod
-    def parse_cors_origins(cls, v):
-        """Handle CORS_ORIGINS as comma-separated string or JSON array"""
-        if isinstance(v, str):
+    def parse_cors_origins_before(cls, data: Any) -> Any:
+        """Handle CORS_ORIGINS as comma-separated string before field parsing"""
+        if not isinstance(data, dict):
+            return data
+            
+        # Check for CORS_ORIGINS in environment variables (uppercase)
+        cors_key = 'CORS_ORIGINS'
+        if cors_key not in data:
+            return data
+            
+        cors_value = data[cors_key]
+        
+        # Skip if already a list
+        if isinstance(cors_value, list):
+            return data
+        
+        # Handle string values
+        if isinstance(cors_value, str):
+            cors_value = cors_value.strip()
+            
+            # Empty string - remove to use default
+            if not cors_value:
+                del data[cors_key]
+                return data
+            
             # Try parsing as JSON first
             try:
-                return json.loads(v)
-            except (json.JSONDecodeError, ValueError):
-                # If not JSON, treat as comma-separated string
-                return [origin.strip() for origin in v.split(',') if origin.strip()]
-        return v
+                parsed = json.loads(cors_value)
+                if isinstance(parsed, list):
+                    data[cors_key] = parsed
+                    return data
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+            
+            # If not JSON, treat as comma-separated string
+            origins = [origin.strip() for origin in cors_value.split(',') if origin.strip()]
+            if origins:
+                data[cors_key] = origins
+            else:
+                # Invalid format - remove to use default
+                del data[cors_key]
+        
+        return data
     
     # CORS
     CORS_ORIGINS: List[str] = [
