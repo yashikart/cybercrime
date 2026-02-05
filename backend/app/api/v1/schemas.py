@@ -177,8 +177,8 @@ class IncidentReportRequest(BaseModel):
 
 
 class TransactionSummary(BaseModel):
-    total_in: int
-    total_out: int
+    total_in: float
+    total_out: float
     tx_count: int
     unique_senders: int
     unique_receivers: int
@@ -188,7 +188,7 @@ class TransactionSummary(BaseModel):
 class GraphEdge(BaseModel):
     from_address: str = Field(alias="from")
     to_address: str = Field(alias="to")
-    amount: int
+    amount: float
     
     class Config:
         populate_by_name = True
@@ -196,7 +196,7 @@ class GraphEdge(BaseModel):
 
 class TimelineEntry(BaseModel):
     time: str
-    amount: int
+    amount: float
     timestamp: str
 
 

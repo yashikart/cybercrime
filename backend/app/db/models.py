@@ -106,6 +106,9 @@ class Evidence(Base):
     title = Column(String, nullable=False)
     description = Column(Text)
     hash = Column(String, nullable=False)
+    file_path = Column(String, nullable=True)  # Path to stored file
+    file_size = Column(Integer, nullable=True)  # File size in bytes
+    file_type = Column(String, nullable=True)  # MIME type or file extension
     anchor_status = Column(String, default="pending")  # pending, anchored, verified
     immutable = Column(Boolean, default=True)
     investigator_id = Column(Integer, ForeignKey("users.id"))
@@ -206,13 +209,26 @@ class Complaint(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Relationships
+    investigator = relationship("User", foreign_keys=[investigator_id])
+    
     def to_dict(self):
         """Convert to dictionary for API response"""
         import json
+        investigator_name = None
+        investigator_email = None
+        # Get investigator info from relationship (should be loaded via joinedload in endpoint)
+        if self.investigator:
+            # Use full_name if available, otherwise fall back to email
+            investigator_name = self.investigator.full_name or self.investigator.email
+            investigator_email = self.investigator.email
+        
         return {
             "id": self.id,
             "wallet_address": self.wallet_address,
             "investigator_id": self.investigator_id,
+            "investigator_name": investigator_name,
+            "investigator_email": investigator_email,
             "officer_designation": self.officer_designation,
             "officer_address": self.officer_address,
             "officer_email": json.loads(self.officer_email) if self.officer_email else [],

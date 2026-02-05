@@ -8,20 +8,58 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import Evidence
+from app.db.models import Evidence, User, Message
 from app.api.v1.schemas import EvidenceResponse
 from app.core.config import settings
+from app.core.security import decode_access_token
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 router = APIRouter()
 
 # Ensure evidence storage directory exists
 EVIDENCE_STORAGE_DIR = Path(settings.EVIDENCE_STORAGE_PATH)
 EVIDENCE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def get_current_user_from_request(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Get current user from Authorization header in request"""
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        return None
+    
+    # Extract token from "Bearer <token>" format
+    try:
+        if authorization.startswith("Bearer "):
+            token = authorization.split(" ")[1]
+        else:
+            token = authorization
+    except Exception:
+        return None
+    
+    if not token:
+        return None
+    
+    try:
+        payload = decode_access_token(token)
+        if payload is None:
+            return None
+        email = payload.get("sub")
+        if not email:
+            return None
+        user = db.query(User).filter(User.email == email).first()
+        return user
+    except Exception:
+        return None
 
 
 @router.get("/", response_model=List[EvidenceResponse])
@@ -107,6 +145,7 @@ async def view_evidence(evidence_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=EvidenceResponse)
 async def create_evidence(
+    request: Request,
     file: UploadFile = File(...),
     wallet_id: str = Form(...),
     title: str = Form(""),
@@ -122,58 +161,138 @@ async def create_evidence(
     This is designed to work with the Investigator UI "Evidence Upload"
     section. It accepts ANY file type (PDF, images, CSV, Excel, docs, etc.)
     via multipart/form-data and stores the file plus metadata in SQL.
+    Notifies superadmin when evidence is uploaded.
     """
-    # Read file bytes and compute a SHA-256 hash for integrity
-    content = await file.read()
-    file_hash = hashlib.sha256(content).hexdigest()
-    file_size = len(content)
+    try:
+        # Get current user from request headers
+        current_user: Optional[User] = await get_current_user_from_request(request, db)
+        
+        # Validate required fields
+        if not wallet_id or not wallet_id.strip():
+            raise HTTPException(status_code=400, detail="Wallet ID is required")
+        
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="File is required")
+        
+        # Use current_user's ID if available, otherwise use provided investigator_id
+        if current_user and current_user.role == "investigator":
+            investigator_id = current_user.id
+        elif not investigator_id:
+            # If no investigator_id provided and no authenticated user, that's okay
+            # Evidence can be uploaded without investigator association
+            pass
+        
+        # Read file bytes and compute a SHA-256 hash for integrity
+        content = await file.read()
+        file_hash = hashlib.sha256(content).hexdigest()
+        file_size = len(content)
 
-    # Generate a simple evidence ID based on timestamp
-    evidence_id = f"EV-{int(datetime.utcnow().timestamp() * 1000)}"
+        # Generate a simple evidence ID based on timestamp
+        evidence_id = f"EV-{int(datetime.utcnow().timestamp() * 1000)}"
 
-    # Use provided title if present, otherwise fall back to filename / evidence_id
-    resolved_title = title or file.filename or evidence_id
+        # Use provided title if present, otherwise fall back to filename / evidence_id
+        resolved_title = title or file.filename or evidence_id
 
-    # Get file extension and MIME type
-    file_extension = ""
-    if file.filename:
-        file_extension = Path(file.filename).suffix
-    file_type = file.content_type or file_extension or "application/octet-stream"
+        # Get file extension and MIME type
+        file_extension = ""
+        if file.filename:
+            file_extension = Path(file.filename).suffix
+        file_type = file.content_type or file_extension or "application/octet-stream"
 
-    # Save file to storage directory
-    # Use evidence_id as filename to ensure uniqueness
-    safe_filename = f"{evidence_id}{file_extension}" if file_extension else evidence_id
-    file_path = EVIDENCE_STORAGE_DIR / safe_filename
-    
-    # Write file to disk
-    with open(file_path, "wb") as f:
-        f.write(content)
+        # Save file to storage directory
+        # Use evidence_id as filename to ensure uniqueness
+        safe_filename = f"{evidence_id}{file_extension}" if file_extension else evidence_id
+        file_path = EVIDENCE_STORAGE_DIR / safe_filename
+        
+        # Write file to disk
+        with open(file_path, "wb") as f:
+            f.write(content)
 
-    # Enrich description with context from the form so it's visible later
-    details_parts = []
-    if description:
-        details_parts.append(description)
-    details_parts.append(f"Wallet: {wallet_id}")
-    if tags:
-        details_parts.append(f"Tags: {tags}")
-    if risk_level:
-        details_parts.append(f"Risk level: {risk_level}")
-    full_description = "\n".join(details_parts)
+        # Enrich description with context from the form so it's visible later
+        details_parts = []
+        if description:
+            details_parts.append(description)
+        details_parts.append(f"Wallet: {wallet_id}")
+        if tags:
+            details_parts.append(f"Tags: {tags}")
+        if risk_level:
+            details_parts.append(f"Risk level: {risk_level}")
+        full_description = "\n".join(details_parts)
 
-    db_evidence = Evidence(
-        evidence_id=evidence_id,
-        title=resolved_title,
-        description=full_description,
-        hash=file_hash,
-        file_path=str(file_path),
-        file_size=file_size,
-        file_type=file_type,
-        anchor_status="pending",
-        immutable=True,
-        investigator_id=investigator_id,
-    )
+        db_evidence = Evidence(
+            evidence_id=evidence_id,
+            title=resolved_title,
+            description=full_description,
+            hash=file_hash,
+            file_path=str(file_path),
+            file_size=file_size,
+            file_type=file_type,
+            anchor_status="pending",
+            immutable=True,
+            investigator_id=investigator_id,
+        )
 
-    db.add(db_evidence)
-    db.commit()
-    db.refresh(db_evidence)
-    return db_evidence
+        db.add(db_evidence)
+        db.commit()
+        db.refresh(db_evidence)
+        
+        # Notify superadmin about new evidence upload
+        try:
+            superadmin = db.query(User).filter(User.role == "superadmin").first()
+            if superadmin:
+                # Get investigator name if available
+                investigator_name = "Unknown Investigator"
+                if investigator_id:
+                    investigator = db.query(User).filter(User.id == investigator_id).first()
+                    if investigator:
+                        investigator_name = investigator.full_name or investigator.email or "Unknown Investigator"
+                elif current_user:
+                    investigator_name = current_user.full_name or current_user.email or "Unknown Investigator"
+                
+                notification = Message(
+                    sender_id=None,  # System-generated
+                    recipient_id=superadmin.id,
+                    message_type="notification",
+                    subject=f"New Evidence Uploaded: {resolved_title}",
+                    content=f"A new evidence file has been uploaded.\n\nEvidence ID: {evidence_id}\nTitle: {resolved_title}\nWallet ID: {wallet_id}\nInvestigator: {investigator_name}\nRisk Level: {risk_level}\nFile Size: {file_size / 1024:.2f} KB\n\nDescription: {description or 'No description provided'}\n\nView evidence in the Evidence Library section.",
+                    priority="high",  # Changed to "high" to ensure it's visible
+                    is_broadcast=False,
+                    is_read=False
+                )
+                db.add(notification)
+                db.commit()
+                db.refresh(notification)
+                
+                # Verify notification was created
+                verify_notification = db.query(Message).filter(Message.id == notification.id).first()
+                if verify_notification:
+                    print(f"[NOTIFICATION] ✓ Created evidence upload notification (ID: {notification.id}) for superadmin: {superadmin.email}")
+                else:
+                    print(f"[NOTIFICATION ERROR] Notification was not saved to database!")
+            else:
+                print(f"[NOTIFICATION WARNING] No superadmin user found in database!")
+        except Exception as e:
+            # Don't fail the evidence creation if notification fails
+            import logging
+            import traceback
+            error_msg = f"Failed to send superadmin notification for evidence upload: {e}\n{traceback.format_exc()}"
+            logging.error(error_msg)
+            print(f"[NOTIFICATION ERROR] {error_msg}")
+        
+        return db_evidence
+    except HTTPException as he:
+        # Re-raise HTTP exceptions as-is
+        import logging
+        logging.error(f"HTTP error creating evidence: {he.detail}")
+        raise
+    except Exception as e:
+        # Log the full error for debugging
+        import logging
+        import traceback
+        error_msg = f"Error creating evidence: {str(e)}\n{traceback.format_exc()}"
+        logging.error(error_msg)
+        print(f"ERROR: {error_msg}")  # Also print to console for immediate visibility
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload evidence: {str(e)}"
+        )

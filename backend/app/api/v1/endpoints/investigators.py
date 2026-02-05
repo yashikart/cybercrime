@@ -10,7 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
@@ -1156,6 +1156,243 @@ async def get_investigator_status(investigator_id: int, db: Session = Depends(ge
             "ip_address": investigator.location_ip,
             "last_updated": investigator.last_activity_at.isoformat() if investigator.last_activity_at else None
         }
+    }
+
+
+@router.get("/{investigator_id}/dashboard")
+async def get_investigator_dashboard(
+    investigator_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get investigator self-service dashboard stats"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, and_
+    from app.db.models import Complaint, IncidentReport, Evidence, Message
+    
+    # Verify investigator exists
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    if not investigator:
+        raise HTTPException(status_code=404, detail="Investigator not found")
+    
+    # Get stats
+    total_complaints = db.query(Complaint).filter(Complaint.investigator_id == investigator_id).count()
+    active_complaints = db.query(Complaint).filter(
+        and_(
+            Complaint.investigator_id == investigator_id,
+            Complaint.status.in_(["submitted", "under_review"])
+        )
+    ).count()
+    
+    total_reports = db.query(IncidentReport).filter(IncidentReport.investigator_id == investigator_id).count()
+    active_reports = db.query(IncidentReport).filter(
+        and_(
+            IncidentReport.investigator_id == investigator_id,
+            IncidentReport.status.in_(["investigating", "under_review"])
+        )
+    ).count()
+    
+    total_evidence = db.query(Evidence).filter(Evidence.investigator_id == investigator_id).count()
+    
+    unread_messages = db.query(Message).filter(
+        and_(
+            Message.recipient_id == investigator_id,
+            Message.is_read == False
+        )
+    ).count()
+    
+    # Recent activity (last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    recent_complaints = db.query(Complaint).filter(
+        and_(
+            Complaint.investigator_id == investigator_id,
+            Complaint.created_at >= seven_days_ago
+        )
+    ).count()
+    
+    recent_reports = db.query(IncidentReport).filter(
+        and_(
+            IncidentReport.investigator_id == investigator_id,
+            IncidentReport.created_at >= seven_days_ago
+        )
+    ).count()
+    
+    recent_evidence = db.query(Evidence).filter(
+        and_(
+            Evidence.investigator_id == investigator_id,
+            Evidence.created_at >= seven_days_ago
+        )
+    ).count()
+    
+    # Activity timeline (last 10 actions)
+    recent_activities = []
+    
+    # Get recent complaints
+    recent_complaints_list = db.query(Complaint).filter(
+        Complaint.investigator_id == investigator_id
+    ).order_by(Complaint.created_at.desc()).limit(5).all()
+    for c in recent_complaints_list:
+        recent_activities.append({
+            "type": "complaint",
+            "id": c.id,
+            "title": f"Filed complaint for {c.wallet_address[:10]}...",
+            "timestamp": c.created_at.isoformat() if c.created_at else None,
+            "status": c.status
+        })
+    
+    # Get recent reports
+    recent_reports_list = db.query(IncidentReport).filter(
+        IncidentReport.investigator_id == investigator_id
+    ).order_by(IncidentReport.created_at.desc()).limit(5).all()
+    for r in recent_reports_list:
+        recent_activities.append({
+            "type": "report",
+            "id": r.id,
+            "title": f"AI analysis for {r.wallet_address[:10]}...",
+            "timestamp": r.created_at.isoformat() if r.created_at else None,
+            "status": r.status,
+            "risk_level": r.risk_level
+        })
+    
+    # Get recent evidence
+    recent_evidence_list = db.query(Evidence).filter(
+        Evidence.investigator_id == investigator_id
+    ).order_by(Evidence.created_at.desc()).limit(5).all()
+    for e in recent_evidence_list:
+        recent_activities.append({
+            "type": "evidence",
+            "id": e.id,
+            "title": e.title or "Evidence uploaded",
+            "timestamp": e.created_at.isoformat() if e.created_at else None,
+            "status": e.anchor_status
+        })
+    
+    # Sort by timestamp and limit to 10
+    recent_activities.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    recent_activities = recent_activities[:10]
+    
+    # Chart data: Activity trend (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    activity_trend = []
+    for i in range(30):
+        day_start = thirty_days_ago + timedelta(days=i)
+        day_end = day_start + timedelta(days=1)
+        
+        day_complaints = db.query(Complaint).filter(
+            and_(
+                Complaint.investigator_id == investigator_id,
+                Complaint.created_at >= day_start,
+                Complaint.created_at < day_end
+            )
+        ).count()
+        
+        day_reports = db.query(IncidentReport).filter(
+            and_(
+                IncidentReport.investigator_id == investigator_id,
+                IncidentReport.created_at >= day_start,
+                IncidentReport.created_at < day_end
+            )
+        ).count()
+        
+        day_evidence = db.query(Evidence).filter(
+            and_(
+                Evidence.investigator_id == investigator_id,
+                Evidence.created_at >= day_start,
+                Evidence.created_at < day_end
+            )
+        ).count()
+        
+        activity_trend.append({
+            "date": day_start.strftime("%Y-%m-%d"),
+            "day": day_start.strftime("%m/%d"),
+            "complaints": day_complaints,
+            "reports": day_reports,
+            "evidence": day_evidence,
+            "total": day_complaints + day_reports + day_evidence
+        })
+    
+    # Status distribution for complaints
+    complaint_status_dist = {}
+    all_complaints = db.query(Complaint).filter(Complaint.investigator_id == investigator_id).all()
+    for c in all_complaints:
+        status = c.status or "unknown"
+        complaint_status_dist[status] = complaint_status_dist.get(status, 0) + 1
+    
+    # Status distribution for reports
+    report_status_dist = {}
+    all_reports = db.query(IncidentReport).filter(IncidentReport.investigator_id == investigator_id).all()
+    for r in all_reports:
+        status = r.status or "unknown"
+        report_status_dist[status] = report_status_dist.get(status, 0) + 1
+    
+    # Risk level distribution for reports
+    risk_level_dist = {}
+    for r in all_reports:
+        risk = r.risk_level or "unknown"
+        risk_level_dist[risk] = risk_level_dist.get(risk, 0) + 1
+    
+    # Activity type breakdown
+    activity_breakdown = {
+        "complaints": total_complaints,
+        "reports": total_reports,
+        "evidence": total_evidence
+    }
+    
+    return {
+        "investigator": {
+            "id": investigator.id,
+            "email": investigator.email,
+            "full_name": investigator.full_name or investigator.email,
+            "availability_status": investigator.availability_status or "available",
+            "status_updated_at": investigator.status_updated_at.isoformat() if investigator.status_updated_at else None
+        },
+        "stats": {
+            "total_complaints": total_complaints,
+            "active_complaints": active_complaints,
+            "total_reports": total_reports,
+            "active_reports": active_reports,
+            "total_evidence": total_evidence,
+            "unread_messages": unread_messages,
+            "recent_complaints": recent_complaints,
+            "recent_reports": recent_reports,
+            "recent_evidence": recent_evidence
+        },
+        "recent_activity": recent_activities,
+        "charts": {
+            "activity_trend": activity_trend,
+            "complaint_status_distribution": [{"status": k, "count": v} for k, v in complaint_status_dist.items()],
+            "report_status_distribution": [{"status": k, "count": v} for k, v in report_status_dist.items()],
+            "risk_level_distribution": [{"risk_level": k, "count": v} for k, v in risk_level_dist.items()],
+            "activity_breakdown": activity_breakdown
+        }
+    }
+
+
+@router.patch("/{investigator_id}/status")
+async def update_investigator_status(
+    investigator_id: int,
+    status: str = Query(..., description="Availability status: available, busy, away, offline"),
+    db: Session = Depends(get_db)
+):
+    """Update investigator availability status"""
+    from datetime import datetime
+    
+    if status not in ["available", "busy", "away", "offline"]:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be: available, busy, away, offline")
+    
+    investigator = db.query(User).filter(User.id == investigator_id).first()
+    if not investigator:
+        raise HTTPException(status_code=404, detail="Investigator not found")
+    
+    investigator.availability_status = status
+    investigator.status_updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(investigator)
+    
+    return {
+        "success": True,
+        "investigator_id": investigator_id,
+        "availability_status": status,
+        "status_updated_at": investigator.status_updated_at.isoformat() if investigator.status_updated_at else None
     }
 
 

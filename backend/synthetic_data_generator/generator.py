@@ -64,7 +64,8 @@ def generate_normal_activity(wallet: str, days: int = 5) -> List[Dict]:
 
 def generate_fraud_activity(wallet: str) -> List[Dict]:
     """
-    Generate fraudulent transaction activity pattern
+    Generate fraudulent transaction activity pattern with multiple accounts
+    Shows classic scam: multiple victims -> fraud wallet -> multiple mule accounts
     
     Args:
         wallet: Wallet address involved in fraud
@@ -75,27 +76,78 @@ def generate_fraud_activity(wallet: str) -> List[Dict]:
     txns = []
     now = datetime.now()
 
-    senders = [random_wallet("VICTIM") for _ in range(random.randint(3, 6))]
-    total = 0
+    # Phase 1: Multiple victims send money to fraud wallet (3-8 victims)
+    num_victims = random.randint(5, 10)
+    senders = [random_wallet("VICTIM") for _ in range(num_victims)]
+    total_collected = 0
 
     for i, s in enumerate(senders):
-        amount = random.randint(5000, 20000)
-        total += amount
+        amount = random.randint(3000, 25000)
+        total_collected += amount
 
         txns.append({
             "from": s,
             "to": wallet,
             "amount": amount,
-            "timestamp": (now - timedelta(minutes=10 - i*2)).isoformat()
+            "timestamp": (now - timedelta(hours=2, minutes=30 - i*3)).isoformat(),
+            "type": "TRANSFER"
         })
 
-    # Fast consolidation (classic scam pattern)
-    txns.append({
-        "from": wallet,
-        "to": random_wallet("MULE"),
-        "amount": total - random.randint(500, 1500),
-        "timestamp": now.isoformat()
-    })
+    # Phase 2: Fraud wallet splits funds to multiple mule accounts (obfuscation)
+    num_mules = random.randint(3, 6)
+    mule_accounts = [random_wallet("MULE") for _ in range(num_mules)]
+    split_amount = total_collected // num_mules
+    
+    for i, mule in enumerate(mule_accounts):
+        # Vary amounts slightly to avoid detection
+        amount = split_amount + random.randint(-500, 500)
+        txns.append({
+            "from": wallet,
+            "to": mule,
+            "amount": amount,
+            "timestamp": (now - timedelta(hours=1, minutes=45 - i*5)).isoformat(),
+            "type": "TRANSFER"
+        })
+        
+        # Mule accounts send to intermediate accounts (layering)
+        if random.random() < 0.6:  # 60% go through another layer
+            intermediate = random_wallet("INTERMEDIATE")
+            txns.append({
+                "from": mule,
+                "to": intermediate,
+                "amount": amount - random.randint(50, 200),
+                "timestamp": (now - timedelta(hours=1, minutes=40 - i*5)).isoformat(),
+                "type": "TRANSFER"
+            })
+            
+            # Final exit to clean wallet
+            txns.append({
+                "from": intermediate,
+                "to": random_wallet("EXIT"),
+                "amount": amount - random.randint(100, 300),
+                "timestamp": (now - timedelta(hours=1, minutes=35 - i*5)).isoformat(),
+                "type": "TRANSFER"
+            })
+        else:
+            # Direct exit from mule
+            txns.append({
+                "from": mule,
+                "to": random_wallet("EXIT"),
+                "amount": amount - random.randint(50, 200),
+                "timestamp": (now - timedelta(hours=1, minutes=30 - i*5)).isoformat(),
+                "type": "TRANSFER"
+            })
+
+    # Phase 3: Remaining funds consolidated to main exit wallet
+    remaining = total_collected - (split_amount * num_mules)
+    if remaining > 100:
+        txns.append({
+            "from": wallet,
+            "to": random_wallet("MASTER_EXIT"),
+            "amount": remaining - random.randint(100, 500),
+            "timestamp": now.isoformat(),
+            "type": "TRANSFER"
+        })
 
     return txns
 

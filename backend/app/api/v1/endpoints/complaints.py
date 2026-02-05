@@ -3,7 +3,7 @@ Complaints endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -23,7 +23,7 @@ async def get_complaints(
     db: Session = Depends(get_db),
 ):
     """Get all filed complaints"""
-    query = db.query(Complaint)
+    query = db.query(Complaint).options(joinedload(Complaint.investigator))
     if investigator_id is not None:
         query = query.filter(Complaint.investigator_id == investigator_id)
     
@@ -40,7 +40,7 @@ async def get_complaints(
 @router.get("/{complaint_id}", response_model=ComplaintResponse)
 async def get_complaint(complaint_id: int, db: Session = Depends(get_db)):
     """Get a specific complaint by ID"""
-    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    complaint = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
     return complaint.to_dict()
@@ -70,7 +70,10 @@ async def create_complaint(complaint: ComplaintCreate, db: Session = Depends(get
     db.add(db_complaint)
     db.commit()
     db.refresh(db_complaint)
-    return db_complaint.to_dict()
+    # Reload with investigator relationship
+    db.refresh(db_complaint)
+    complaint_with_investigator = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == db_complaint.id).first()
+    return complaint_with_investigator.to_dict() if complaint_with_investigator else db_complaint.to_dict()
 
 
 @router.patch("/{complaint_id}/status", response_model=ComplaintResponse)
@@ -89,4 +92,6 @@ async def update_complaint_status(
     db.add(complaint)
     db.commit()
     db.refresh(complaint)
-    return complaint.to_dict()
+    # Reload with investigator relationship
+    complaint_with_investigator = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == complaint.id).first()
+    return complaint_with_investigator.to_dict() if complaint_with_investigator else complaint.to_dict()

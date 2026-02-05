@@ -225,8 +225,16 @@ export function DashboardContent() {
 
       setFreezeUnfreezeNotifications(notifications.slice(0, 10));
 
-      // Fetch incident reports for active investigations
-      const reportsRes = await fetch("http://localhost:3000/api/v1/incidents/reports?limit=10");
+      // Fetch incident reports for active investigations (superadmin sees all)
+      const token = localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
+      const reportsRes = await fetch("http://localhost:3000/api/v1/incidents/reports?limit=10", {
+        headers: headers,
+      });
       let reports: any[] = [];
       if (reportsRes.ok) {
         reports = await reportsRes.json();
@@ -237,17 +245,17 @@ export function DashboardContent() {
         .filter((report: any) => {
           // Filter out placeholder/test data
           // Only include reports with valid wallet addresses and risk scores
-          return report.wallet_address && 
-                 report.wallet_address.length > 10 && // Valid wallet address
-                 report.risk_score !== null && 
-                 report.risk_score !== undefined &&
-                 report.created_at; // Must have creation date
+          return report.wallet_address &&
+            report.wallet_address.length > 10 && // Valid wallet address
+            report.risk_score !== null &&
+            report.risk_score !== undefined &&
+            report.created_at; // Must have creation date
         })
         .map((report: any) => {
-          const investigator = report.investigator_id 
+          const investigator = report.investigator_id
             ? investigators.find((inv: any) => inv.id === report.investigator_id)
             : null;
-          
+
           // Parse detected patterns if it's a string
           let detectedPatterns = report.detected_patterns || [];
           if (typeof detectedPatterns === 'string') {
@@ -260,7 +268,7 @@ export function DashboardContent() {
           if (!Array.isArray(detectedPatterns)) {
             detectedPatterns = [];
           }
-          
+
           return {
             id: report.id || report._id,
             walletAddress: report.wallet_address,
@@ -290,14 +298,14 @@ export function DashboardContent() {
           // Transform backend data to match frontend expectations
           const transformedItems = (pqData.items || []).map((item: any) => {
             // Find investigator name
-            const investigator = item.investigator_id 
+            const investigator = item.investigator_id
               ? investigators.find((inv: any) => inv.id === item.investigator_id)
               : null;
-            
+
             // Count related complaints and reports
             const complaintsCount = complaints.filter((c: any) => c.wallet_address === item.wallet_address).length;
             const reportsCount = reports.filter((r: any) => r.wallet_address === item.wallet_address).length;
-            
+
             // Calculate progress (simple heuristic based on status and age)
             let progress = 0;
             if (item.status === "resolved" || item.status === "closed") {
@@ -309,7 +317,7 @@ export function DashboardContent() {
             } else {
               progress = 10;
             }
-            
+
             return {
               id: item.id,
               kind: item.kind,
@@ -397,7 +405,7 @@ export function DashboardContent() {
         recentComplaints,
         totalWallets: wallets.length,
         frozenWallets,
-        fraudTransactions: fraudStats.fraud,
+        fraudTransactions: aiAnalysisNotifications.length,
         normalTransactions: fraudStats.normal,
         fraudDetectionAccuracy: modelAccuracy,
       });
@@ -416,37 +424,37 @@ export function DashboardContent() {
   ];
 
   const suspiciousWallets = [
-    { 
-      address: "0x742d35...8a2f4e", 
-      riskScore: 94, 
-      violationType: "Money Laundering", 
+    {
+      address: "0x742d35...8a2f4e",
+      riskScore: 94,
+      violationType: "Money Laundering",
       action: "Immediate Freeze",
       details: "Multiple high-value transactions to sanctioned entities",
       analyzed: "5m ago",
       severity: "Critical"
     },
-    { 
-      address: "0x8f3a21...d4c9b7", 
-      riskScore: 87, 
-      violationType: "Fraud Detection", 
+    {
+      address: "0x8f3a21...d4c9b7",
+      riskScore: 87,
+      violationType: "Fraud Detection",
       action: "Monitor & Report",
       details: "Abnormal transaction patterns detected",
       analyzed: "12m ago",
       severity: "High"
     },
-    { 
-      address: "0x1a5d89...f3e2c1", 
-      riskScore: 89, 
-      violationType: "Ransomware Payment", 
+    {
+      address: "0x1a5d89...f3e2c1",
+      riskScore: 89,
+      violationType: "Ransomware Payment",
       action: "Escalate to Authorities",
       details: "Linked to known ransomware group",
       analyzed: "18m ago",
       severity: "High"
     },
-    { 
-      address: "0x6c7b45...a9d8f2", 
-      riskScore: 72, 
-      violationType: "Tax Evasion", 
+    {
+      address: "0x6c7b45...a9d8f2",
+      riskScore: 72,
+      violationType: "Tax Evasion",
       action: "Further Investigation",
       details: "Unreported large transactions",
       analyzed: "25m ago",
@@ -471,40 +479,40 @@ export function DashboardContent() {
   };
 
   const dashboardStats = [
-    { 
-      label: "Total Complaints", 
-      value: stats.totalComplaints.toString(), 
-      change: `+${stats.recentComplaints} this week`, 
-      icon: FileText, 
-      color: "emerald" 
+    {
+      label: "Total Complaints",
+      value: stats.totalComplaints.toString(),
+      change: `+${stats.recentComplaints} this week`,
+      icon: FileText,
+      color: "emerald"
     },
-    { 
-      label: "Active Cases", 
-      value: stats.activeCases.toString(), 
-      change: `${Math.round((stats.activeCases / Math.max(stats.totalComplaints, 1)) * 100)}% active`, 
-      icon: FolderOpen, 
-      color: "cyan" 
+    {
+      label: "Active Cases",
+      value: stats.activeCases.toString(),
+      change: `${Math.round((stats.activeCases / Math.max(stats.totalComplaints, 1)) * 100)}% active`,
+      icon: FolderOpen,
+      color: "cyan"
     },
-    { 
-      label: "Evidence Items", 
-      value: stats.totalEvidence.toString(), 
-      change: `+${Math.floor(stats.totalEvidence * 0.1)} recent`, 
-      icon: Database, 
-      color: "purple" 
+    {
+      label: "Evidence Items",
+      value: stats.totalEvidence.toString(),
+      change: `+${Math.floor(stats.totalEvidence * 0.1)} recent`,
+      icon: Database,
+      color: "purple"
     },
-    { 
-      label: "Investigators", 
-      value: stats.totalInvestigators.toString(), 
-      change: "Active", 
-      icon: Users, 
-      color: "blue" 
+    {
+      label: "Investigators",
+      value: stats.totalInvestigators.toString(),
+      change: "Active",
+      icon: Users,
+      color: "blue"
     },
-    { 
-      label: "Fraud Detected", 
-      value: stats.fraudTransactions.toString(), 
-      change: `${stats.fraudDetectionAccuracy > 0 ? stats.fraudDetectionAccuracy.toFixed(1) + "% accuracy" : "Model ready"}`, 
-      icon: Brain, 
-      color: "rose" 
+    {
+      label: "Recent AI Analysis",
+      value: stats.fraudTransactions.toString(),
+      change: "Reports generated",
+      icon: Brain,
+      color: "rose"
     },
   ];
 
@@ -574,7 +582,7 @@ export function DashboardContent() {
                       const adminToken = localStorage.getItem("admin_token");
                       // Update local state to mark all as read
                       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                      
+
                       // Call backend to mark as read
                       if (adminToken) {
                         await fetch("http://localhost:3000/api/v1/dashboard/notifications/mark-all-read", {
@@ -613,8 +621,8 @@ export function DashboardContent() {
                   sev === "critical"
                     ? "red"
                     : sev === "warning" || sev === "warn"
-                    ? "yellow"
-                    : "cyan";
+                      ? "yellow"
+                      : "cyan";
 
                 let IconComp = Zap;
                 if (notif.type === "ai") IconComp = Bot;
@@ -624,11 +632,10 @@ export function DashboardContent() {
                 return (
                   <div
                     key={notif.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${
-                      notif.read 
-                        ? "bg-black/20 border-emerald-500/5 opacity-60" 
-                        : "bg-black/40 border-emerald-500/10 hover:border-emerald-500/40"
-                    }`}
+                    className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${notif.read
+                      ? "bg-black/20 border-emerald-500/5 opacity-60"
+                      : "bg-black/40 border-emerald-500/10 hover:border-emerald-500/40"
+                      }`}
                   >
                     <div
                       className={`p-2 rounded-lg bg-${sevColor}-500/10 border border-${sevColor}-500/40`}
@@ -745,8 +752,8 @@ export function DashboardContent() {
                   sev === "critical"
                     ? "red"
                     : sev === "warning" || sev === "warn"
-                    ? "yellow"
-                    : "cyan";
+                      ? "yellow"
+                      : "cyan";
 
                 let IconComp = Zap;
                 if (event.type === "wallet") IconComp = Database;
@@ -846,10 +853,10 @@ export function DashboardContent() {
                     level === "critical"
                       ? "red"
                       : level === "high"
-                      ? "orange"
-                      : level === "medium"
-                      ? "yellow"
-                      : "emerald";
+                        ? "orange"
+                        : level === "medium"
+                          ? "yellow"
+                          : "emerald";
                   const label = level.charAt(0).toUpperCase() + level.slice(1);
                   return (
                     <div key={level} className="mb-1">
@@ -963,11 +970,11 @@ export function DashboardContent() {
               };
               const riskColor = getRiskColor(analysis.riskLevel);
 
-              const detectedPatterns = Array.isArray(analysis.detectedPatterns) 
-                ? analysis.detectedPatterns 
-                : (typeof analysis.detectedPatterns === 'string' 
-                    ? JSON.parse(analysis.detectedPatterns || '[]') 
-                    : []);
+              const detectedPatterns = Array.isArray(analysis.detectedPatterns)
+                ? analysis.detectedPatterns
+                : (typeof analysis.detectedPatterns === 'string'
+                  ? JSON.parse(analysis.detectedPatterns || '[]')
+                  : []);
 
               return (
                 <div
@@ -990,7 +997,7 @@ export function DashboardContent() {
                           Score: {analysis.riskScore}
                         </span>
                       </div>
-                      
+
                       <div className="mb-2">
                         {analysis.investigator && analysis.investigator !== "Unknown" && (
                           <p className="text-gray-400 text-xs font-mono mb-1">
@@ -1019,13 +1026,12 @@ export function DashboardContent() {
                       </div>
 
                       <div className="flex items-center justify-between text-xs">
-                        <span className={`px-2 py-0.5 text-xs font-mono rounded ${
-                          analysis.status === "active" || analysis.status === "investigating"
-                            ? "bg-emerald-950/40 border border-emerald-500/30 text-emerald-400"
-                            : analysis.status === "resolved" || analysis.status === "closed"
+                        <span className={`px-2 py-0.5 text-xs font-mono rounded ${analysis.status === "active" || analysis.status === "investigating"
+                          ? "bg-emerald-950/40 border border-emerald-500/30 text-emerald-400"
+                          : analysis.status === "resolved" || analysis.status === "closed"
                             ? "bg-blue-950/40 border border-blue-500/30 text-blue-400"
                             : "bg-gray-950/40 border border-gray-500/30 text-gray-400"
-                        }`}>
+                          }`}>
                           {analysis.status.toUpperCase()}
                         </span>
                         <span className="text-gray-600 font-mono">
@@ -1033,9 +1039,9 @@ export function DashboardContent() {
                         </span>
                       </div>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
                     >
                       <Eye className="w-4 h-4" />
@@ -1127,18 +1133,16 @@ export function DashboardContent() {
                 return (
                   <div
                     key={notification.id}
-                    className={`p-4 bg-black/40 border rounded-lg hover:border-opacity-60 transition-all group ${
-                      isFreeze
-                        ? "border-red-500/20 hover:border-red-500/40"
-                        : "border-emerald-500/20 hover:border-emerald-500/40"
-                    }`}
+                    className={`p-4 bg-black/40 border rounded-lg hover:border-opacity-60 transition-all group ${isFreeze
+                      ? "border-red-500/20 hover:border-red-500/40"
+                      : "border-emerald-500/20 hover:border-emerald-500/40"
+                      }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg border ${
-                        isFreeze
-                          ? "bg-red-500/10 border-red-500/30"
-                          : "bg-emerald-500/10 border-emerald-500/30"
-                      }`}>
+                      <div className={`p-2 rounded-lg border ${isFreeze
+                        ? "bg-red-500/10 border-red-500/30"
+                        : "bg-emerald-500/10 border-emerald-500/30"
+                        }`}>
                         {isFreeze ? (
                           <Lock className={`w-4 h-4 text-red-400`} />
                         ) : (
@@ -1147,9 +1151,8 @@ export function DashboardContent() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`font-mono text-sm ${
-                            isFreeze ? "text-red-400" : "text-emerald-400"
-                          }`}>
+                          <span className={`font-mono text-sm ${isFreeze ? "text-red-400" : "text-emerald-400"
+                            }`}>
                             {isFreeze ? "🔒 FROZEN" : "🔓 UNFROZEN"}
                           </span>
                           <span className={`px-2 py-0.5 text-xs font-mono bg-${riskColor}-950/40 border border-${riskColor}-500/30 rounded text-${riskColor}-400`}>
@@ -1212,7 +1215,7 @@ export function DashboardContent() {
                 };
                 const riskLevel = wallet.riskLevel || "medium";
                 const riskColor = getRiskColor(riskLevel);
-                
+
                 return (
                   <div
                     key={wallet.id || index}

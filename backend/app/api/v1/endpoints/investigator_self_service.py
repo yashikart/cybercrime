@@ -14,7 +14,7 @@ from app.db.models import User, Complaint, IncidentReport, Evidence, Message, Au
 router = APIRouter()
 
 
-@router.get("/investigators/{investigator_id}/dashboard")
+@router.get("/{investigator_id}/dashboard")
 async def get_investigator_dashboard(
     investigator_id: int,
     db: Session = Depends(get_db)
@@ -144,7 +144,7 @@ async def get_investigator_dashboard(
     }
 
 
-@router.patch("/investigators/{investigator_id}/status")
+@router.patch("/{investigator_id}/status")
 async def update_investigator_status(
     investigator_id: int,
     status: str,  # available, busy, away, offline

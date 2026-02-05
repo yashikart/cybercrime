@@ -8,6 +8,8 @@ interface Complaint {
   id: number;
   wallet_address: string;
   investigator_id: number | null;
+  investigator_name: string | null;
+  investigator_email: string | null;
   officer_designation: string;
   officer_address: string | null;
   officer_email: string[] | null;
@@ -281,13 +283,22 @@ export function ComplaintsViewContent() {
                     </td>
                     <td className="py-4 px-4">
                       {(() => {
-                        const inv = complaint.investigator_id
-                          ? investigators.find((i) => i.id === complaint.investigator_id)
-                          : undefined;
-                        const name = inv?.full_name || inv?.email || "Unknown Investigator";
+                        // First try to use investigator_name/investigator_email from complaint data (from backend)
+                        // Backend returns investigator_name as full_name or email, and investigator_email separately
+                        let displayName = complaint.investigator_name || complaint.investigator_email;
+                        
+                        // If not available from complaint data, try to find from investigators list
+                        if (!displayName && complaint.investigator_id) {
+                          const inv = investigators.find((i) => i.id === complaint.investigator_id);
+                          displayName = inv?.full_name || inv?.email;
+                        }
+                        
                         return (
                           <div>
-                            <p className="text-gray-200 font-mono text-sm">{name}</p>
+                            <p className="text-gray-200 font-mono text-sm">{displayName || "Unknown Investigator"}</p>
+                            {complaint.investigator_email && complaint.investigator_email !== displayName && (
+                              <p className="text-gray-500 font-mono text-xs mt-1">{complaint.investigator_email}</p>
+                            )}
                           </div>
                         );
                       })()}

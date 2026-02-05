@@ -17,8 +17,10 @@ import {
   UserCog,
   Trash2,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  MapPin
 } from "lucide-react";
+import { InvestigatorMap } from "./InvestigatorMap";
 
 interface DatabaseStatus {
   connected: boolean;
@@ -43,6 +45,7 @@ export function ManualInvestigatorContent() {
   const [locationLat, setLocationLat] = useState<number | null>(null);
   const [locationLng, setLocationLng] = useState<number | null>(null);
   const [locationIP, setLocationIP] = useState("");
+  const [geocodingLocation, setGeocodingLocation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
@@ -82,6 +85,52 @@ export function ManualInvestigatorContent() {
       });
     } finally {
       setDbLoading(false);
+    }
+  };
+
+  const geocodeLocation = async () => {
+    if (!locationCity.trim() && !locationCountry.trim()) {
+      alert("Please enter at least a city or country");
+      return;
+    }
+
+    setGeocodingLocation(true);
+    try {
+      // Use Nominatim (OpenStreetMap) free geocoding API
+      const query = [locationCity.trim(), locationCountry.trim()].filter(Boolean).join(", ");
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'Cybercrime Portal' // Required by Nominatim
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const result = data[0];
+          setLocationLat(parseFloat(result.lat));
+          setLocationLng(parseFloat(result.lon));
+          // Update city/country if they were empty
+          if (!locationCity.trim() && result.address) {
+            setLocationCity(result.address.city || result.address.town || result.address.village || "");
+          }
+          if (!locationCountry.trim() && result.address) {
+            setLocationCountry(result.address.country || "");
+          }
+        } else {
+          alert("Location not found. Please check the city and country names.");
+        }
+      } else {
+        alert("Failed to geocode location. Please enter coordinates manually.");
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      alert("Error geocoding location. Please enter coordinates manually.");
+    } finally {
+      setGeocodingLocation(false);
     }
   };
 
@@ -412,10 +461,62 @@ export function ManualInvestigatorContent() {
                 />
               </div>
             </div>
+
+            {/* Geocode Button */}
+            <Button
+              type="button"
+              onClick={geocodeLocation}
+              disabled={geocodingLocation || (!locationCity.trim() && !locationCountry.trim())}
+              className="w-full bg-cyan-600/20 border border-cyan-500/40 text-cyan-400 hover:bg-cyan-600/30 font-mono text-sm disabled:opacity-50"
+            >
+              {geocodingLocation ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Geocoding...
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Get Location on Map
+                </>
+              )}
+            </Button>
             
-            {(locationLat !== null || locationLng !== null) && (
-              <div className="text-xs text-cyan-400 font-mono">
-                Coordinates: {locationLat?.toFixed(4)}, {locationLng?.toFixed(4)}
+            {/* Manual Coordinates */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="locationLat" className="text-gray-300 font-mono text-xs mb-1 block">
+                  Latitude (optional)
+                </Label>
+                <Input
+                  id="locationLat"
+                  type="number"
+                  step="any"
+                  placeholder="e.g., 40.7128"
+                  value={locationLat ?? ""}
+                  onChange={(e) => setLocationLat(e.target.value ? parseFloat(e.target.value) : null)}
+                  className="bg-black/60 border-cyan-500/40 text-gray-100 placeholder:text-gray-600 focus:border-cyan-400 font-mono text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="locationLng" className="text-gray-300 font-mono text-xs mb-1 block">
+                  Longitude (optional)
+                </Label>
+                <Input
+                  id="locationLng"
+                  type="number"
+                  step="any"
+                  placeholder="e.g., -74.0060"
+                  value={locationLng ?? ""}
+                  onChange={(e) => setLocationLng(e.target.value ? parseFloat(e.target.value) : null)}
+                  className="bg-black/60 border-cyan-500/40 text-gray-100 placeholder:text-gray-600 focus:border-cyan-400 font-mono text-sm"
+                />
+              </div>
+            </div>
+            
+            {(locationLat !== null && locationLng !== null) && (
+              <div className="text-xs text-cyan-400 font-mono p-2 bg-cyan-950/40 rounded border border-cyan-500/30">
+                ✓ Location marked: {locationLat.toFixed(4)}, {locationLng.toFixed(4)}
               </div>
             )}
           </div>
@@ -636,6 +737,28 @@ export function ManualInvestigatorContent() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Investigator Locations Map */}
+      <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-cyan-500/20 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <MapPin className="w-5 h-5 text-cyan-400" />
+          <h2 className="text-lg text-cyan-400 font-mono">Investigator Locations Map</h2>
+        </div>
+        <p className="text-gray-400 font-mono text-sm mb-4">
+          View all investigators marked on the world map. Hover over markers to see investigator details.
+        </p>
+        <InvestigatorMap 
+          investigators={investigators.map(inv => ({
+            id: inv.id,
+            email: inv.email,
+            full_name: inv.full_name,
+            city: inv.location_city,
+            country: inv.location_country,
+            latitude: inv.location_latitude,
+            longitude: inv.location_longitude,
+          }))} 
+        />
       </div>
     </div>
   );
