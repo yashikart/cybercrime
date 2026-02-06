@@ -18,6 +18,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
+import { apiUrl } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -78,7 +79,7 @@ export function InvestigatorCommunicationContent() {
   const fetchInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/investigators");
+      const response = await fetch(apiUrl("investigators/investigators"));
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -111,7 +112,7 @@ export function InvestigatorCommunicationContent() {
     
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/investigators/${selectedInvestigator}/message`,
+        apiUrl(`messages/investigators/${selectedInvestigator}/message`),
         {
           method: "POST",
           headers: {
@@ -157,7 +158,7 @@ export function InvestigatorCommunicationContent() {
     
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/broadcast`,
+        apiUrl(`messages/broadcast`),
         {
           method: "POST",
           headers: {

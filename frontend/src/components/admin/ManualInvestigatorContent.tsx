@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { InvestigatorMap } from "./InvestigatorMap";
 
+import { apiUrl } from "@/lib/api";
 interface DatabaseStatus {
   connected: boolean;
   database_type: string;
@@ -66,7 +67,7 @@ export function ManualInvestigatorContent() {
   const checkDatabaseStatus = async () => {
     setDbLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/database/status");
+      const response = await fetch(apiUrl("investigators/database/status"));
       if (response.ok) {
         const data = await response.json();
         setDbStatus(data);
@@ -144,7 +145,7 @@ export function ManualInvestigatorContent() {
     setLoading(true);
     setEmailResult(null);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/send-welcome-email", {
+      const response = await fetch(apiUrl("investigators/send-welcome-email"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -206,7 +207,7 @@ export function ManualInvestigatorContent() {
     setSuperadminLoading(true);
     setSuperadminResult(null);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/init-superadmin", {
+      const response = await fetch(apiUrl("investigators/init-superadmin"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -239,7 +240,7 @@ export function ManualInvestigatorContent() {
   const fetchInvestigators = async () => {
     setInvestigatorsLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/investigators");
+      const response = await fetch(apiUrl("investigators/investigators"));
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -259,7 +260,7 @@ export function ManualInvestigatorContent() {
 
     setDeleteLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/delete-all-investigators", {
+      const response = await fetch(apiUrl("investigators/delete-all-investigators"), {
         method: "DELETE",
       });
 

@@ -3,6 +3,7 @@ import { Brain, Search, AlertTriangle, CheckCircle, TrendingUp, Loader2, Eye, Ba
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
+import { apiUrl } from "@/lib/api";
 interface FraudAnalysis {
   total_transactions: number;
   fraud_count: number;
@@ -41,11 +42,11 @@ export function WalletFraudAnalysis() {
 
     try {
       // First try to get wallet data with fraud analysis
-      const response = await fetch(`http://localhost:3000/api/v1/wallets/search/${walletAddress}`);
+      const response = await fetch(apiUrl(`wallets/search/${walletAddress}`));
       
       if (!response.ok) {
         // If wallet not found, try fraud transaction analysis directly
-        const fraudResponse = await fetch(`http://localhost:3000/api/v1/wallet-fraud/${walletAddress}/analyze`);
+        const fraudResponse = await fetch(apiUrl(`wallet-fraud/${walletAddress}/analyze`));
         if (fraudResponse.ok) {
           const fraudData = await fraudResponse.json();
           setWalletData({

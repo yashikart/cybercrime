@@ -5,6 +5,7 @@ import { Textarea } from "../ui/textarea";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 
+import { apiUrl } from "@/lib/api";
 interface WalletData {
   wallet: {
     id: number;
@@ -76,7 +77,7 @@ export function EscalationsContent() {
   const fetchFrozenWallets = async () => {
     setLoadingFrozen(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/wallets/frozen/list");
+      const response = await fetch(apiUrl("wallets/frozen/list"));
       if (response.ok) {
         const data = await response.json();
         setFrozenWallets(data);
@@ -91,7 +92,7 @@ export function EscalationsContent() {
   const fetchUnfrozenWallets = async () => {
     setLoadingUnfrozen(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/wallets/unfrozen/list");
+      const response = await fetch(apiUrl("wallets/unfrozen/list"));
       if (response.ok) {
         const data = await response.json();
         setUnfrozenWallets(data);
@@ -108,7 +109,7 @@ export function EscalationsContent() {
     
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/wallets/search/${encodeURIComponent(searchWallet.trim())}`);
+      const response = await fetch(apiUrl(`wallets/search/${encodeURIComponent(searchWallet.trim())}`));
       if (response.ok) {
         const data = await response.json();
         setWalletResult(data);
@@ -130,7 +131,7 @@ export function EscalationsContent() {
     const adminEmail = localStorage.getItem("admin_email") || "superadmin@cybercrime.gov";
     
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/wallets/${freezingWalletId}/freeze`, {
+      const response = await fetch(apiUrl(`wallets/${freezingWalletId}/freeze`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -170,7 +171,7 @@ export function EscalationsContent() {
     const adminEmail = localStorage.getItem("admin_email") || "superadmin@cybercrime.gov";
     
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/wallets/${walletId}/unfreeze`, {
+      const response = await fetch(apiUrl(`wallets/${walletId}/unfreeze`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

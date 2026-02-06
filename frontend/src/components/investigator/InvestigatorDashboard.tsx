@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
+import { apiUrl } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -54,7 +55,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
       }
 
       try {
-        const response = await fetch("http://localhost:3000/api/v1/auth/me", {
+        const response = await fetch(apiUrl("auth/me"), {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -96,7 +97,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
     const fetchUnreadCount = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/unread-count`
+          apiUrl(`messages/investigators/${investigatorId}/unread-count`)
         );
         if (response.ok) {
           const data = await response.json();
@@ -329,7 +330,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
               onMarkAsRead={() => {
                 // Refresh unread count when message is marked as read
                 if (investigatorId) {
-                  fetch(`http://localhost:3000/api/v1/messages/investigators/${investigatorId}/unread-count`)
+                  fetch(apiUrl(`messages/investigators/${investigatorId}/unread-count`))
                     .then(res => res.json())
                     .then(data => setUnreadCount(data.unread_count || 0))
                     .catch(console.error);
@@ -372,7 +373,7 @@ function IncidentReportSection({ investigatorId }: { investigatorId: number | nu
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch("http://localhost:3000/api/v1/incidents/analyze", {
+      const response = await fetch(apiUrl("incidents/analyze"), {
         method: "POST",
         headers: headers,
         body: JSON.stringify({
@@ -625,7 +626,7 @@ function EvidenceUploadSection() {
           console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
           console.log(`Wallet ID: ${walletId.trim()}, Has token: ${!!token}`);
           
-          const response = await fetch("http://localhost:3000/api/v1/evidence/", {
+          const response = await fetch(apiUrl("evidence/"), {
             method: "POST",
             headers: headers,
             body: formData,
@@ -927,7 +928,7 @@ function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
   const fetchEvidence = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/v1/evidence/");
+      const res = await fetch(apiUrl("evidence/"));
       if (res.ok) {
         const data = await res.json();
         setEvidence(data);
@@ -1246,7 +1247,7 @@ function WatchlistSection() {
   const fetchWatchlist = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/v1/watchlist");
+      const res = await fetch(apiUrl("watchlist"));
       if (res.ok) {
         const data = await res.json();
         setWatchlist(data);
@@ -1270,7 +1271,7 @@ function WatchlistSection() {
       params.append("wallet_address", walletAddress.trim());
       if (label.trim()) params.append("label", label.trim());
       const res = await fetch(
-        `http://localhost:3000/api/v1/watchlist?${params.toString()}`,
+        apiUrl(`watchlist?${params.toString()}`),
         { method: "POST" }
       );
       if (res.ok) {
@@ -1286,7 +1287,7 @@ function WatchlistSection() {
   const handleRemove = async (id: number) => {
     try {
       const res = await fetch(
-        `http://localhost:3000/api/v1/watchlist/${id}`,
+        apiUrl(`watchlist/${id}`),
         { method: "DELETE" }
       );
       if (res.ok) {
@@ -1301,7 +1302,7 @@ function WatchlistSection() {
     try {
       setAnalyzingId(id);
       const res = await fetch(
-        `http://localhost:3000/api/v1/watchlist/${id}/analyze`,
+        apiUrl(`watchlist/${id}/analyze`),
         { method: "POST" }
       );
       if (res.ok) {
@@ -1321,7 +1322,7 @@ function WatchlistSection() {
     try {
       setBatchLoading(true);
       const res = await fetch(
-        "http://localhost:3000/api/v1/watchlist/batch-analyze",
+        apiUrl("watchlist/batch-analyze"),
         { method: "POST" }
       );
       if (res.ok) {
@@ -1556,7 +1557,7 @@ function AIAnalysisSection() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/incidents/reports?${params.toString()}`, {
+      const response = await fetch(apiUrl(`incidents/reports?${params.toString()}`), {
         headers: headers,
       });
       
@@ -1592,7 +1593,7 @@ function AIAnalysisSection() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/incidents/reports/${reportId}`, {
+      const response = await fetch(apiUrl(`incidents/reports/${reportId}`), {
         headers: headers,
       });
       
@@ -1627,7 +1628,7 @@ function AIAnalysisSection() {
   const handleStatusUpdate = async (reportId: string, newStatus: string) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/incidents/reports/${reportId}/status?status=${newStatus}`,
+        apiUrl(`incidents/reports/${reportId}/status?status=${newStatus}`),
         {
           method: "PATCH",
           headers: {
@@ -2029,7 +2030,7 @@ function ContactPoliceSection({
   const fetchWalletEvidence = async (walletAddress: string) => {
     setEvidenceLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/v1/evidence/");
+      const res = await fetch(apiUrl("evidence/"));
       if (res.ok) {
         const data = await res.json();
         const filtered = (data as any[]).filter((item) => {
@@ -2528,7 +2529,7 @@ function ContactPoliceSection({
                   }
 
                   const evidenceIds = walletEvidence.map((e) => e.id);
-                  const response = await fetch("http://localhost:3000/api/v1/complaints/", {
+                  const response = await fetch(apiUrl("complaints/"), {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -2595,7 +2596,7 @@ function ComplaintHistorySection() {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/complaints/");
+      const response = await fetch(apiUrl("complaints/"));
       if (response.ok) {
         const data = await response.json();
         setComplaints(data);
@@ -2618,7 +2619,7 @@ function ComplaintHistorySection() {
   const handleStatusUpdate = async (complaintId: number, newStatus: string) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/complaints/${complaintId}/status?status=${newStatus}`,
+        apiUrl(`complaints/${complaintId}/status?status=${newStatus}`),
         {
           method: "PATCH",
           headers: {
@@ -3073,7 +3074,7 @@ function ResetPasswordSection() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/reset-password", {
+      const response = await fetch(apiUrl("investigators/reset-password"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3325,7 +3326,7 @@ function NotificationBell({
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/messages?limit=5`
+        apiUrl(`messages/investigators/${investigatorId}/messages?limit=5`)
       );
       if (response.ok) {
         const data = await response.json();
@@ -3498,7 +3499,7 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/messages?unread_only=${filter === "unread"}`
+        apiUrl(`messages/investigators/${investigatorId}/messages?unread_only=${filter === "unread"}`)
       );
       if (response.ok) {
         const data = await response.json();
@@ -3515,7 +3516,7 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
   const handleMarkAsRead = async (messageId: number) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/messages/${messageId}/read`,
+        apiUrl(`messages/messages/${messageId}/read`),
         { method: "PATCH" }
       );
       if (response.ok) {
@@ -3540,7 +3541,7 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
     setReplying(true);
     try {
       const response = await fetch(
-        `http://localhost:3000/api/v1/messages/investigators/${investigatorId}/reply?message_id=${selectedMessage.id}`,
+        apiUrl(`messages/investigators/${investigatorId}/reply?message_id=${selectedMessage.id}`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3871,7 +3872,7 @@ function InvestigatorSelfServiceDashboard({ investigatorId }: { investigatorId: 
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/investigators/${investigatorId}/dashboard`, {
+      const response = await fetch(apiUrl(`investigators/${investigatorId}/dashboard`), {
         headers,
       });
 
@@ -3946,7 +3947,7 @@ function InvestigatorSelfServiceDashboard({ investigatorId }: { investigatorId: 
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/investigators/${investigatorId}/status?status=${status}`, {
+      const response = await fetch(apiUrl(`investigators/${investigatorId}/status?status=${status}`), {
         method: "PATCH",
         headers,
       });

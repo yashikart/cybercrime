@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Shield, Lock, Mail, Terminal, AlertTriangle, Eye, EyeOff, Users, Activity, FolderOpen, CheckCircle } from "lucide-react";
+import { apiUrl } from "@/lib/api";
 
 export function InvestigatorLoginForm() {
   const [email, setEmail] = useState("");
@@ -42,7 +43,7 @@ export function InvestigatorLoginForm() {
       {/* Header */}
       <div className="text-center mb-8 relative">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-        
+
         <div className="relative flex items-center justify-center mb-6">
           <div className="relative">
             <div className="absolute inset-0 w-24 h-24 -left-4 -top-4">
@@ -51,7 +52,7 @@ export function InvestigatorLoginForm() {
             <div className="absolute inset-0 w-24 h-24 -left-4 -top-4">
               <div className="w-full h-full border-2 border-cyan-400/30 border-b-cyan-400 rounded-full animate-spin" style={{ animationDirection: "reverse", animationDuration: "3s" }}></div>
             </div>
-            
+
             <div className="relative bg-black/80 backdrop-blur-xl p-4 rounded-full border border-emerald-500/30 shadow-lg shadow-emerald-500/20">
               <Users className="w-8 h-8 text-emerald-400" />
               <Terminal className="w-4 h-4 text-cyan-400 absolute bottom-3 right-3" />
@@ -90,9 +91,9 @@ export function InvestigatorLoginForm() {
 
         <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 rounded-lg blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-500"></div>
         <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 rounded-lg blur opacity-20 animate-pulse"></div>
-        
+
         <div className="relative bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl border border-emerald-500/30 rounded-lg shadow-2xl overflow-hidden">
-          <div 
+          <div
             className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50 transition-all duration-100"
             style={{ transform: `translateY(${scanProgress * 5}px)` }}
           ></div>
@@ -118,7 +119,7 @@ export function InvestigatorLoginForm() {
                 <span className="text-cyan-400 text-xs font-mono">{scanProgress}%</span>
               </div>
               <div className="w-full h-1 bg-black/50 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-100"
                   style={{ width: `${scanProgress}%` }}
                 ></div>
@@ -191,7 +192,7 @@ export function InvestigatorLoginForm() {
                     <input type="checkbox" className="peer sr-only" />
                     <div className="w-4 h-4 border-2 border-emerald-500/50 rounded bg-black/50 peer-checked:bg-gradient-to-br peer-checked:from-emerald-500 peer-checked:to-cyan-500 transition"></div>
                     <svg className="absolute top-0.5 left-0.5 w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <polyline points="20 6 9 17 4 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                      <polyline points="20 6 9 17 4 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
                   <span className="font-mono text-xs">Remember Session</span>
@@ -276,7 +277,7 @@ function RequestAccessButton() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Validate form data
     if (!formData.full_name.trim() || !formData.email.trim()) {
       setSubmitStatus("error");
@@ -290,8 +291,8 @@ function RequestAccessButton() {
 
     try {
       console.log("Submitting access request:", formData);
-      
-      const response = await fetch("http://localhost:3000/api/v1/access-requests/request", {
+
+      const response = await fetch(apiUrl("access-requests/request"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -317,7 +318,7 @@ function RequestAccessButton() {
         setSubmitStatus("success");
         setFormData({ full_name: "", email: "", reason: "" });
         console.log("Access request submitted successfully:", responseData);
-        
+
         // Show success message for 3 seconds before closing
         setTimeout(() => {
           setShowModal(false);

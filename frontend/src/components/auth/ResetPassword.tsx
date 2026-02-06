@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { KeyRound, Lock, Eye, EyeOff, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import { apiUrl } from "@/lib/api";
 
 interface ResetPasswordProps {
   setCurrentPage?: (page: string) => void;
@@ -17,14 +18,14 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{success: boolean; message: string} | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     // Get email and token from URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const emailParam = urlParams.get("email");
     const tokenParam = urlParams.get("token");
-    
+
     if (emailParam) {
       setEmail(emailParam);
     }
@@ -61,7 +62,7 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/reset-password", {
+      const response = await fetch(apiUrl("investigators/reset-password"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +130,7 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
         {/* Header */}
         <div className="text-center mb-8 relative">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-          
+
           <div className="relative flex items-center justify-center mb-6">
             <div className="relative">
               <div className="absolute inset-0 w-24 h-24 -left-4 -top-4">
@@ -138,7 +139,7 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
               <div className="absolute inset-0 w-24 h-24 -left-4 -top-4">
                 <div className="w-full h-full border-2 border-cyan-400/30 border-b-cyan-400 rounded-full animate-spin" style={{ animationDirection: "reverse", animationDuration: "3s" }}></div>
               </div>
-              
+
               <div className="relative bg-black/80 backdrop-blur-xl p-4 rounded-full border border-emerald-500/30 shadow-lg shadow-emerald-500/20">
                 <KeyRound className="w-8 h-8 text-emerald-400" />
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
@@ -164,7 +165,7 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
           <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-2 border-r-2 border-emerald-400 opacity-50"></div>
 
           <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 rounded-lg blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-500"></div>
-          
+
           <div className="relative bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl border border-emerald-500/30 rounded-lg shadow-2xl overflow-hidden p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email (read-only if from URL) */}
@@ -263,20 +264,18 @@ export function ResetPassword({ setCurrentPage }: ResetPasswordProps) {
 
               {/* Result Message */}
               {result && (
-                <div className={`p-4 rounded-lg border ${
-                  result.success
+                <div className={`p-4 rounded-lg border ${result.success
                     ? "bg-emerald-950/20 border-emerald-500/30"
                     : "bg-red-950/20 border-red-500/30"
-                }`}>
+                  }`}>
                   <div className="flex items-start gap-3">
                     {result.success ? (
                       <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5" />
                     ) : (
                       <XCircle className="w-5 h-5 text-red-400 mt-0.5" />
                     )}
-                    <p className={`font-mono text-sm ${
-                      result.success ? "text-emerald-400" : "text-red-400"
-                    }`}>
+                    <p className={`font-mono text-sm ${result.success ? "text-emerald-400" : "text-red-400"
+                      }`}>
                       {result.message}
                     </p>
                   </div>

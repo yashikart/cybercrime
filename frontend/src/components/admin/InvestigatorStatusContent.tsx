@@ -19,6 +19,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { Button } from "../ui/button";
+import { apiUrl } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -102,7 +103,7 @@ export function InvestigatorStatusContent() {
   const fetchInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/investigators");
+      const response = await fetch(apiUrl("investigators/investigators"));
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -122,7 +123,7 @@ export function InvestigatorStatusContent() {
     
     setLoadingStatus(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/investigators/${selectedInvestigator}/status`);
+      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/status`));
       if (response.ok) {
         const data = await response.json();
         setStatusData(data);

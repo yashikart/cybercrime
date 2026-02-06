@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { CheckCircle, XCircle, Clock, Search, UserPlus, Mail, FileText, Calendar } from "lucide-react";
 
+import { apiUrl } from "@/lib/api";
 interface AccessRequest {
   id: number;
   full_name: string;
@@ -38,7 +39,7 @@ export function AccessRequestsContent() {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/v1/access-requests/requests");
+      const response = await fetch(apiUrl("access-requests/requests"));
       if (response.ok) {
         const data = await response.json();
         setRequests(data);
@@ -82,7 +83,7 @@ export function AccessRequestsContent() {
       }
 
       const response = await fetch(
-        `http://localhost:3000/api/v1/access-requests/requests/${requestId}/review?reviewed_by=${adminId || ""}`,
+        apiUrl(`access-requests/requests/${requestId}/review?reviewed_by=${adminId || ""}`),
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

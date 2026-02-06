@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { apiUrl } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -182,7 +183,7 @@ export function InvestigatorActivityContent() {
   const fetchAllInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/investigators/activity/all");
+      const response = await fetch(apiUrl("investigators/activity/all"));
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -203,7 +204,7 @@ export function InvestigatorActivityContent() {
   const fetchInvestigatorActivity = async (investigatorId: number) => {
     setLoadingActivity(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/investigators/${investigatorId}/activity`);
+      const response = await fetch(apiUrl(`investigators/${investigatorId}/activity`));
       if (response.ok) {
         const data = await response.json();
         setActivityData(data);
@@ -234,7 +235,7 @@ export function InvestigatorActivityContent() {
       }
       
       const response = await fetch(
-        `http://localhost:3000/api/v1/investigators/${selectedInvestigator}/activity-logs?${params.toString()}`
+        apiUrl(`investigators/${selectedInvestigator}/activity-logs?${params.toString()}`)
       );
       
       if (response.ok) {
@@ -252,7 +253,7 @@ export function InvestigatorActivityContent() {
     if (!selectedInvestigator) return;
     
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/investigators/${selectedInvestigator}/activity`);
+      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/activity`));
       if (response.ok) {
         const data = await response.json();
         setInvestigatorDetails(data.investigator);
@@ -268,28 +269,28 @@ export function InvestigatorActivityContent() {
     setLoadingDetails(true);
     try {
       // Fetch evidence
-      const evidenceRes = await fetch(`http://localhost:3000/api/v1/evidence/?investigator_id=${selectedInvestigator}`);
+      const evidenceRes = await fetch(apiUrl(`evidence/?investigator_id=${selectedInvestigator}`));
       if (evidenceRes.ok) {
         const evidenceData = await evidenceRes.json();
         setEvidence(evidenceData || []);
       }
 
       // Fetch complaints
-      const complaintsRes = await fetch(`http://localhost:3000/api/v1/complaints/?investigator_id=${selectedInvestigator}`);
+      const complaintsRes = await fetch(apiUrl(`complaints/?investigator_id=${selectedInvestigator}`));
       if (complaintsRes.ok) {
         const complaintsData = await complaintsRes.json();
         setComplaints(complaintsData || []);
       }
 
       // Fetch incident reports
-      const reportsRes = await fetch(`http://localhost:3000/api/v1/incidents/reports?investigator_id=${selectedInvestigator}`);
+      const reportsRes = await fetch(apiUrl(`incidents/reports?investigator_id=${selectedInvestigator}`));
       if (reportsRes.ok) {
         const reportsData = await reportsRes.json();
         setReports(reportsData || []);
       }
 
       // Fetch watchlist
-      const watchlistRes = await fetch(`http://localhost:3000/api/v1/watchlist/`);
+      const watchlistRes = await fetch(apiUrl(`watchlist/`));
       if (watchlistRes.ok) {
         const watchlistData = await watchlistRes.json();
         const filtered = (watchlistData || []).filter(
@@ -1106,7 +1107,7 @@ export function InvestigatorActivityContent() {
                                   variant="outline"
                                   size="sm"
                                   className="bg-cyan-950/20 border-cyan-500/30 text-cyan-400"
-                                  onClick={() => window.open(`http://localhost:3000/api/v1/evidence/${e.id}/view`, "_blank")}
+                                  onClick={() => window.open(apiUrl(`evidence/${e.id}/view`), "_blank")}
                                 >
                                   <ExternalLink className="w-4 h-4 mr-2" />
                                   View

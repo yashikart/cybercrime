@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+import { apiUrl } from "@/lib/api";
 interface IncidentReportData {
   wallet: string;
   risk_score: number;
@@ -353,9 +354,9 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
             try {
               setIsSavingNote(true);
               const res = await fetch(
-                `http://localhost:3000/api/v1/incidents/reports/${reportData.report_id}/notes?note=${encodeURIComponent(
+                apiUrl(`incidents/reports/${reportData.report_id}/notes?note=${encodeURIComponent(
                   newNote.trim()
-                )}`,
+                )}`),
                 {
                   method: "POST",
                 }

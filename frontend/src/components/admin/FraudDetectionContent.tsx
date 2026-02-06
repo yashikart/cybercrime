@@ -3,6 +3,7 @@ import { Brain, Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle,
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
+import { apiUrl } from "@/lib/api";
 interface FraudTransaction {
   id: number;
   step: number;
@@ -63,7 +64,7 @@ export function FraudDetectionContent() {
 
   const fetchModelStatus = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/v1/fraud-predictions/model/status");
+      const response = await fetch(apiUrl("fraud-predictions/model/status"));
       const data = await response.json();
       setModelStatus(data);
     } catch (error) {
@@ -74,7 +75,7 @@ export function FraudDetectionContent() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/v1/fraud-transactions/?limit=100");
+      const response = await fetch(apiUrl("fraud-transactions/?limit=100"));
       const data = await response.json();
       setTransactions(data);
     } catch (error) {
@@ -86,7 +87,7 @@ export function FraudDetectionContent() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/v1/fraud-transactions/stats");
+      const response = await fetch(apiUrl("fraud-transactions/stats"));
       const data = await response.json();
       setStats(data);
     } catch (error) {
@@ -96,7 +97,7 @@ export function FraudDetectionContent() {
 
   const predictTransaction = async (transactionId: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/fraud-predictions/predict/${transactionId}`);
+      const response = await fetch(apiUrl(`fraud-predictions/predict/${transactionId}`));
       const data = await response.json();
       setPredictions(prev => new Map(prev).set(transactionId, data));
     } catch (error) {
@@ -112,7 +113,7 @@ export function FraudDetectionContent() {
     
     for (const id of visibleIds) {
       try {
-        const response = await fetch(`http://localhost:3000/api/v1/fraud-predictions/predict/${id}`);
+        const response = await fetch(apiUrl(`fraud-predictions/predict/${id}`));
         const data = await response.json();
         predictionsMap.set(id, data);
       } catch (error) {
