@@ -119,28 +119,29 @@ async def analyze_watchlist_wallet(watch_id: int, db: Session = Depends(get_db))
         .first()
     )
 
-    # Safely set attributes (in case columns don't exist yet)
-    if hasattr(item, 'last_risk_score'):
-        item.last_risk_score = report.risk_score
-    if hasattr(item, 'last_risk_level'):
-        item.last_risk_level = report.risk_level
-    if hasattr(item, 'last_checked_at'):
-        item.last_checked_at = datetime.utcnow()
-    if hasattr(item, 'last_report_id'):
-        item.last_report_id = last_report.id if last_report else None
-    
-    db.add(item)
-    db.commit()
-    db.refresh(item)
+    # Note: Not updating watchlist monitoring fields since columns don't exist yet
+    # Once migration adds the columns, uncomment the code below:
+    # if hasattr(item, 'last_risk_score'):
+    #     item.last_risk_score = report.risk_score
+    # if hasattr(item, 'last_risk_level'):
+    #     item.last_risk_level = report.risk_level
+    # if hasattr(item, 'last_checked_at'):
+    #     item.last_checked_at = datetime.utcnow()
+    # if hasattr(item, 'last_report_id'):
+    #     item.last_report_id = last_report.id if last_report else None
+    # db.add(item)
+    # db.commit()
+    # db.refresh(item)
 
     return {
         "id": item.id,
         "wallet_address": item.wallet_address,
         "label": item.label,
-        "last_risk_score": getattr(item, 'last_risk_score', report.risk_score),
-        "last_risk_level": getattr(item, 'last_risk_level', report.risk_level),
-        "last_checked_at": getattr(item, 'last_checked_at', datetime.utcnow()).isoformat(),
-        "last_report_id": getattr(item, 'last_report_id', last_report.id if last_report else None),
+        "last_risk_score": report.risk_score,
+        "last_risk_level": report.risk_level,
+        "last_checked_at": datetime.utcnow().isoformat(),
+        "last_report_id": last_report.id if last_report else None,
+        "message": "Analysis complete. View the incident report for details.",
     }
 
 
