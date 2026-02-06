@@ -324,11 +324,13 @@ class WatchlistWallet(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     
-    # Monitoring status fields
-    last_risk_score = Column(Float, nullable=True)
-    last_risk_level = Column(String, nullable=True)
-    last_checked_at = Column(DateTime, nullable=True)
-    last_report_id = Column(Integer, ForeignKey("incident_reports.id"), nullable=True)
+    # Monitoring status fields - TEMPORARILY COMMENTED OUT
+    # These will be added by migration, but commenting out prevents SQLAlchemy errors
+    # Uncomment after running migration or when columns exist in database
+    # last_risk_score = Column(Float, nullable=True)
+    # last_risk_level = Column(String, nullable=True)
+    # last_checked_at = Column(DateTime, nullable=True)
+    # last_report_id = Column(Integer, ForeignKey("incident_reports.id"), nullable=True)
     
     def to_dict(self):
         """Convert to dictionary for API response"""
@@ -339,10 +341,11 @@ class WatchlistWallet(Base):
             "active": self.active,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_risk_score": self.last_risk_score,
-            "last_risk_level": self.last_risk_level,
-            "last_checked_at": self.last_checked_at.isoformat() if self.last_checked_at else None,
-            "last_report_id": self.last_report_id,
+            # Return None for monitoring fields until columns are added
+            "last_risk_score": None,
+            "last_risk_level": None,
+            "last_checked_at": None,
+            "last_report_id": None,
         }
 
 
