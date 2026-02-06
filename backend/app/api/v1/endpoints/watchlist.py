@@ -150,7 +150,10 @@ async def analyze_watchlist_wallet(
 
 
 @router.post("/batch-analyze", response_model=dict)
-async def batch_analyze_watchlist(db: Session = Depends(get_db)):
+async def batch_analyze_watchlist(
+    request_obj: Request,  # Add Request object for authentication
+    db: Session = Depends(get_db)
+):
     """
     Run analysis for all active watchlist wallets.
     This auto-creates new incident reports and updates monitoring status.
@@ -166,7 +169,7 @@ async def batch_analyze_watchlist(db: Session = Depends(get_db)):
             wallet_address=item.wallet_address,
             description="Periodic watchlist analysis",
         )
-        report = await analyze_wallet_incident(request, db)
+        report = await analyze_wallet_incident(request, request_obj, db)
 
         last_report = (
             db.query(IncidentReport)
