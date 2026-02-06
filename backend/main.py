@@ -76,7 +76,22 @@ def migrate_database():
     
     try:
         inspector = inspect(engine)
+        db_type = "sqlite" if "sqlite" in str(engine.url) else "postgres"
         
+        # Helper to get correct SQL type
+        def get_sql_type(base_type):
+            if db_type == "sqlite":
+                if base_type == "BOOLEAN":
+                    return "INTEGER DEFAULT 0"
+                if base_type == "DATETIME":
+                    return "DATETIME"
+                return base_type
+            else:
+                # PostgreSQL
+                if base_type == "DATETIME":
+                    return "TIMESTAMP"
+                return base_type
+
         # Check if users table exists
         if "users" in inspector.get_table_names():
             # Get existing columns
@@ -103,15 +118,8 @@ def migrate_database():
                     if col_name not in existing_columns:
                         try:
                             # Use appropriate SQL syntax based on database type
-                            if "sqlite" in str(engine.url):
-                                # SQLite uses INTEGER for boolean (0/1)
-                                if col_type == "BOOLEAN":
-                                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} INTEGER DEFAULT 0"))
-                                else:
-                                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
-                            else:
-                                # PostgreSQL
-                                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                            sql_type = get_sql_type(col_type)
+                            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
                             print(f"[MIGRATION] ✓ Added {col_name} column to users table")
                         except Exception as e:
@@ -125,10 +133,7 @@ def migrate_database():
             with engine.connect() as conn:
                 if "ip_address" not in existing_audit_columns:
                     try:
-                        if "sqlite" in str(engine.url):
-                            conn.execute(text("ALTER TABLE audit_logs ADD COLUMN ip_address VARCHAR"))
-                        else:
-                            conn.execute(text("ALTER TABLE audit_logs ADD COLUMN ip_address VARCHAR"))
+                        conn.execute(text("ALTER TABLE audit_logs ADD COLUMN ip_address VARCHAR"))
                         conn.commit()
                         print(f"[MIGRATION] ✓ Added ip_address column to audit_logs table")
                     except Exception as e:
@@ -152,11 +157,8 @@ def migrate_database():
                 for col_name, col_type in complaint_columns_to_add:
                     if col_name not in existing_complaint_columns:
                         try:
-                            if "sqlite" in str(engine.url):
-                                conn.execute(text(f"ALTER TABLE complaints ADD COLUMN {col_name} {col_type}"))
-                            else:
-                                # PostgreSQL
-                                conn.execute(text(f"ALTER TABLE complaints ADD COLUMN {col_name} {col_type}"))
+                            sql_type = get_sql_type(col_type)
+                            conn.execute(text(f"ALTER TABLE complaints ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
                             print(f"[MIGRATION] ✓ Added {col_name} column to complaints table")
                         except Exception as e:
@@ -177,11 +179,8 @@ def migrate_database():
                 for col_name, col_type in evidence_columns_to_add:
                     if col_name not in existing_evidence_columns:
                         try:
-                            if "sqlite" in str(engine.url):
-                                conn.execute(text(f"ALTER TABLE evidence ADD COLUMN {col_name} {col_type}"))
-                            else:
-                                # PostgreSQL
-                                conn.execute(text(f"ALTER TABLE evidence ADD COLUMN {col_name} {col_type}"))
+                            sql_type = get_sql_type(col_type)
+                            conn.execute(text(f"ALTER TABLE evidence ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
                             print(f"[MIGRATION] ✓ Added {col_name} column to evidence table")
                         except Exception as e:
@@ -195,10 +194,7 @@ def migrate_database():
             with engine.connect() as conn:
                 if "investigator_id" not in existing_incident_columns:
                     try:
-                        if "sqlite" in str(engine.url):
-                            conn.execute(text("ALTER TABLE incident_reports ADD COLUMN investigator_id INTEGER"))
-                        else:
-                            conn.execute(text("ALTER TABLE incident_reports ADD COLUMN investigator_id INTEGER"))
+                        conn.execute(text("ALTER TABLE incident_reports ADD COLUMN investigator_id INTEGER"))
                         conn.commit()
                         print(f"[MIGRATION] ✓ Added investigator_id column to incident_reports table")
                     except Exception as e:
@@ -250,16 +246,9 @@ def migrate_database():
                 for col_name, col_type in wallet_columns_to_add:
                     if col_name not in existing_wallet_columns:
                         try:
-                            if "sqlite" in str(engine.url):
-                                if col_type == "BOOLEAN":
-                                    conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} INTEGER DEFAULT 0"))
-                                elif col_type == "DATETIME":
-                                    conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} TIMESTAMP"))
-                                else:
-                                    conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} {col_type}"))
-                            else:
-                                # PostgreSQL
-                                conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} {col_type}"))
+                            # Use appropriate SQL syntax
+                            sql_type = get_sql_type(col_type)
+                            conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
                             print(f"[MIGRATION] ✓ Added {col_name} column to wallets table")
                         except Exception as e:
