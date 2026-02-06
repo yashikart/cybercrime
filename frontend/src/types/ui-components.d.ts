@@ -35,6 +35,9 @@ declare module 'react-hook-form@7.55.0' {
     [key: string]: any;
   }
   export const Controller: React.ComponentType<ControllerProps>;
+  export const FormProvider: React.ComponentType<any>;
+  export function useFormContext<TFieldValues extends FieldValues = FieldValues>(): any;
+  export function useFormState<TFieldValues extends FieldValues = FieldValues>(props?: any): any;
 }
 
 declare module 'embla-carousel-react@8.6.0' {
@@ -47,7 +50,8 @@ declare module 'input-otp@1.4.2' {
     slots?: Array<{ char?: string; hasFakeCaret?: boolean; isActive?: boolean }>;
     [key: string]: any;
   }
-  export const OTPInputContext: React.Context<InputOTPContextValue>;
+  export const OTPInputContext: React.Context<InputOTPContextValue | null>;
+  export const OTPInput: React.ComponentType<any>;
 }
 
 declare module 'sonner@2.0.3' {
