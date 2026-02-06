@@ -3,7 +3,7 @@ Watchlist & monitoring endpoints.
 Allow saving wallets for quick analysis and tracking latest risk.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -96,7 +96,11 @@ def remove_from_watchlist(watch_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{watch_id}/analyze", response_model=dict)
-async def analyze_watchlist_wallet(watch_id: int, db: Session = Depends(get_db)):
+async def analyze_watchlist_wallet(
+    watch_id: int, 
+    request_obj: Request,  # Add Request object for authentication
+    db: Session = Depends(get_db)
+):
     """
     Run incident analysis for a single watchlist wallet and update monitoring status.
     """
@@ -108,8 +112,8 @@ async def analyze_watchlist_wallet(watch_id: int, db: Session = Depends(get_db))
         wallet_address=item.wallet_address,
         description="Periodic watchlist analysis",
     )
-    # Re-use existing analysis pipeline
-    report = await analyze_wallet_incident(request, db)
+    # Re-use existing analysis pipeline - pass request_obj for authentication
+    report = await analyze_wallet_incident(request, request_obj, db)
 
     # Find the last incident report row for this wallet to link
     last_report = (
