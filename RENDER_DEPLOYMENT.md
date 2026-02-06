@@ -225,27 +225,32 @@ files.forEach(file => {
    - **Start Command**: `npx vite preview --host 0.0.0.0 --port $PORT`
    - **Plan**: Free
 
-4. **Add Environment Variables**:
+4. **Add Environment Variables** (CRITICAL - Must be set BEFORE first build):
    ```
    VITE_API_URL=https://cybercrime-backend.onrender.com/api/v1
    PORT=10000
    ```
-   *(Replace `cybercrime-backend` with your actual backend service name)*
+   **⚠️ IMPORTANT**: 
+   - Replace `cybercrime-backend` with your actual backend service name
+   - `VITE_API_URL` MUST be set BEFORE the first build
+   - Vite embeds environment variables at BUILD time, not runtime
+   - If you add it later, you MUST manually redeploy to rebuild
 
 5. Click **"Create Web Service"**
 
 6. **Wait for deployment** - Note your frontend URL (e.g., `https://cybercrime-frontend.onrender.com`)
 
-## Step 6: Update Frontend Environment Variable
+## Step 6: Update Frontend Environment Variable (If Needed)
 
-After frontend deployment, update `VITE_API_URL`:
+If you need to change `VITE_API_URL` after initial deployment:
 1. Go to frontend service → **Environment** tab
 2. Update `VITE_API_URL` with your actual backend URL:
    ```
    VITE_API_URL=https://cybercrime-backend.onrender.com/api/v1
    ```
-3. **Important**: After changing environment variables, you need to **manually redeploy**:
+   **⚠️ CRITICAL**: After changing `VITE_API_URL`, you MUST manually redeploy:
    - Go to **Manual Deploy** → **Deploy latest commit**
+   - This rebuilds the app with the new environment variable
 
 ## Step 7: Configure Email (Brevo) - Optional
 
