@@ -25,7 +25,38 @@ declare module 'embla-carousel-react@8.6.0';
 declare module 'cmdk@1.1.1';
 declare module 'vaul@1.1.2';
 declare module 'input-otp@1.4.2';
-declare module 'react-hook-form@7.55.0';
+declare module 'react-hook-form@7.55.0' {
+  export type FieldValues = Record<string, any>;
+  export type FieldPath<TFieldValues extends FieldValues> = string & keyof TFieldValues;
+  export interface ControllerProps<TFieldValues extends FieldValues = FieldValues, TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>> {
+    name: TName;
+    control?: any;
+    render?: any;
+    [key: string]: any;
+  }
+  export const Controller: React.ComponentType<ControllerProps>;
+}
+
+declare module 'embla-carousel-react@8.6.0' {
+  export type UseEmblaCarouselType = [any, any];
+  export default function useEmblaCarousel(options?: any, plugins?: any): UseEmblaCarouselType;
+}
+
+declare module 'input-otp@1.4.2' {
+  export interface InputOTPContextValue {
+    slots?: Array<{ char?: string; hasFakeCaret?: boolean; isActive?: boolean }>;
+    [key: string]: any;
+  }
+  export const OTPInputContext: React.Context<InputOTPContextValue>;
+}
+
+declare module 'sonner@2.0.3' {
+  export type ToasterProps = {
+    theme?: 'light' | 'dark' | 'system';
+    [key: string]: any;
+  };
+  export const Toaster: React.ComponentType<ToasterProps>;
+}
+
 declare module 'react-resizable-panels@2.1.7';
 declare module 'next-themes@0.4.6';
-declare module 'sonner@2.0.3';

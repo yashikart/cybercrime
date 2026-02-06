@@ -88,7 +88,7 @@ export function InvestigatorStatusContent() {
   }, [selectedInvestigator]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (autoRefresh && selectedInvestigator) {
       interval = setInterval(() => {
         fetchStatus();
