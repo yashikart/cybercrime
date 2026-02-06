@@ -291,7 +291,7 @@ export function ComplaintsViewContent() {
                         // If not available from complaint data, try to find from investigators list
                         if (!displayName && complaint.investigator_id) {
                           const inv = investigators.find((i) => i.id === complaint.investigator_id);
-                          displayName = inv?.full_name || inv?.email;
+                          displayName = inv?.full_name || inv?.email || null;
                         }
                         
                         return (

@@ -1093,7 +1093,7 @@ export function InvestigatorActivityContent() {
                       {filteredDetailData().length === 0 ? (
                         <p className="text-center text-gray-500 font-mono py-8">No evidence found</p>
                       ) : (
-                        filteredDetailData().map((e: Evidence) => (
+                        (filteredDetailData() as Evidence[]).map((e: Evidence) => (
                           <div key={e.id} className="p-4 bg-black/40 rounded-lg border border-cyan-500/20">
                             <div className="flex items-center justify-between">
                               <div>
@@ -1124,7 +1124,7 @@ export function InvestigatorActivityContent() {
                       {filteredDetailData().length === 0 ? (
                         <p className="text-center text-gray-500 font-mono py-8">No complaints found</p>
                       ) : (
-                        filteredDetailData().map((c: Complaint) => (
+                        (filteredDetailData() as Complaint[]).map((c: Complaint) => (
                           <div key={c.id} className="p-4 bg-black/40 rounded-lg border border-red-500/20">
                             <div className="flex items-center justify-between">
                               <div>
@@ -1149,7 +1149,7 @@ export function InvestigatorActivityContent() {
                       {filteredDetailData().length === 0 ? (
                         <p className="text-center text-gray-500 font-mono py-8">No reports found</p>
                       ) : (
-                        filteredDetailData().map((r: IncidentReport) => (
+                        (filteredDetailData() as IncidentReport[]).map((r: IncidentReport) => (
                           <div key={r._id} className="p-4 bg-black/40 rounded-lg border border-purple-500/20">
                             <div className="flex items-center justify-between">
                               <div>
@@ -1176,7 +1176,7 @@ export function InvestigatorActivityContent() {
                       {filteredDetailData().length === 0 ? (
                         <p className="text-center text-gray-500 font-mono py-8">No watchlist entries found</p>
                       ) : (
-                        filteredDetailData().map((w: WatchlistWallet) => (
+                        (filteredDetailData() as WatchlistWallet[]).map((w: WatchlistWallet) => (
                           <div key={w.id} className="p-4 bg-black/40 rounded-lg border border-emerald-500/20">
                             <div className="flex items-center justify-between">
                               <div>

@@ -70,7 +70,7 @@ function App() {
       case "investigator-login":
         return <InvestigatorLogin setCurrentPage={setCurrentPage} />;
       case "reset-password":
-        return <ResetPassword setCurrentPage={setCurrentPage} />;
+        return <ResetPassword setCurrentPage={(page: string) => setCurrentPage(page as Page)} />;
       case "admin-dashboard":
         return <Admin />;
       case "investigator-dashboard":
