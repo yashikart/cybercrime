@@ -1,7 +1,9 @@
 // API base URL - uses environment variable in production, localhost in development
 // For Render: VITE_API_URL must be set during BUILD time
 // Force rebuild: 2026-02-06
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.DEV
+  ? 'http://localhost:3000/api/v1'
+  : 'https://cybercrime-backend.onrender.com/api/v1';
 
 // Log API URL in development to help debug
 if (import.meta.env.DEV) {
