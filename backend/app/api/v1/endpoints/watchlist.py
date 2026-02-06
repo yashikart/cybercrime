@@ -23,6 +23,7 @@ def get_watchlist(db: Session = Depends(get_db)):
     items = db.query(WatchlistWallet).order_by(WatchlistWallet.created_at.desc()).all()
     result = []
     for w in items:
+        # Use getattr with defaults to handle missing columns gracefully
         result.append(
             {
                 "id": w.id,
@@ -31,10 +32,10 @@ def get_watchlist(db: Session = Depends(get_db)):
                 "active": w.active,
                 "created_by": w.created_by,  # Include created_by for filtering
                 "created_at": w.created_at.isoformat() if w.created_at else None,
-                "last_risk_score": w.last_risk_score,
-                "last_risk_level": w.last_risk_level,
-                "last_checked_at": w.last_checked_at.isoformat() if w.last_checked_at else None,
-                "last_report_id": w.last_report_id,
+                "last_risk_score": getattr(w, 'last_risk_score', None),
+                "last_risk_level": getattr(w, 'last_risk_level', None),
+                "last_checked_at": getattr(w, 'last_checked_at', None).isoformat() if getattr(w, 'last_checked_at', None) else None,
+                "last_report_id": getattr(w, 'last_report_id', None),
             }
         )
     return result
@@ -118,10 +119,16 @@ async def analyze_watchlist_wallet(watch_id: int, db: Session = Depends(get_db))
         .first()
     )
 
-    item.last_risk_score = report.risk_score
-    item.last_risk_level = report.risk_level
-    item.last_checked_at = datetime.utcnow()
-    item.last_report_id = last_report.id if last_report else None
+    # Safely set attributes (in case columns don't exist yet)
+    if hasattr(item, 'last_risk_score'):
+        item.last_risk_score = report.risk_score
+    if hasattr(item, 'last_risk_level'):
+        item.last_risk_level = report.risk_level
+    if hasattr(item, 'last_checked_at'):
+        item.last_checked_at = datetime.utcnow()
+    if hasattr(item, 'last_report_id'):
+        item.last_report_id = last_report.id if last_report else None
+    
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -130,10 +137,10 @@ async def analyze_watchlist_wallet(watch_id: int, db: Session = Depends(get_db))
         "id": item.id,
         "wallet_address": item.wallet_address,
         "label": item.label,
-        "last_risk_score": item.last_risk_score,
-        "last_risk_level": item.last_risk_level,
-        "last_checked_at": item.last_checked_at.isoformat() if item.last_checked_at else None,
-        "last_report_id": item.last_report_id,
+        "last_risk_score": getattr(item, 'last_risk_score', report.risk_score),
+        "last_risk_level": getattr(item, 'last_risk_level', report.risk_level),
+        "last_checked_at": getattr(item, 'last_checked_at', datetime.utcnow()).isoformat(),
+        "last_report_id": getattr(item, 'last_report_id', last_report.id if last_report else None),
     }
 
 
@@ -163,21 +170,25 @@ async def batch_analyze_watchlist(db: Session = Depends(get_db)):
             .first()
         )
 
-        item.last_risk_score = report.risk_score
-        item.last_risk_level = report.risk_level
-        item.last_checked_at = datetime.utcnow()
-        item.last_report_id = last_report.id if last_report else None
+        # Safely set attributes (in case columns don't exist yet)
+        if hasattr(item, 'last_risk_score'):
+            item.last_risk_score = report.risk_score
+        if hasattr(item, 'last_risk_level'):
+            item.last_risk_level = report.risk_level
+        if hasattr(item, 'last_checked_at'):
+            item.last_checked_at = datetime.utcnow()
+        if hasattr(item, 'last_report_id'):
+            item.last_report_id = last_report.id if last_report else None
+        
         db.add(item)
         results.append(
             {
                 "id": item.id,
                 "wallet_address": item.wallet_address,
-                "last_risk_score": item.last_risk_score,
-                "last_risk_level": item.last_risk_level,
-                "last_checked_at": item.last_checked_at.isoformat()
-                if item.last_checked_at
-                else None,
-                "last_report_id": item.last_report_id,
+                "last_risk_score": getattr(item, 'last_risk_score', report.risk_score),
+                "last_risk_level": getattr(item, 'last_risk_level', report.risk_level),
+                "last_checked_at": getattr(item, 'last_checked_at', datetime.utcnow()).isoformat(),
+                "last_report_id": getattr(item, 'last_report_id', last_report.id if last_report else None),
             }
         )
 
