@@ -10,4 +10,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  preview: {
+    host: '0.0.0.0',
+    port: 10000,
+    allowedHosts: [
+      'cybercrime-frontend.onrender.com',
+      'localhost',
+      '.onrender.com', // Allow all Render subdomains
+    ],
+  },
 })
