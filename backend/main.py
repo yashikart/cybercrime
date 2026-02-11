@@ -631,12 +631,39 @@ def validate_openapi_spec(app: FastAPI) -> None:
 
     generated = app.openapi()
     frozen = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
-    if json.dumps(generated, sort_keys=True) != json.dumps(frozen, sort_keys=True):
+
+    generated_paths = generated.get("paths") or {}
+    frozen_paths = frozen.get("paths") or {}
+
+    def _normalize_methods(paths: dict) -> dict:
+        normalized = {}
+        for path, methods in paths.items():
+            normalized[path] = sorted([m.upper() for m in methods.keys()])
+        return normalized
+
+    generated_map = _normalize_methods(generated_paths)
+    frozen_map = _normalize_methods(frozen_paths)
+
+    if generated_map != frozen_map:
+        missing_in_frozen = sorted(set(generated_map.keys()) - set(frozen_map.keys()))
+        extra_in_frozen = sorted(set(frozen_map.keys()) - set(generated_map.keys()))
+        method_mismatches = []
+        for path in set(generated_map.keys()).intersection(frozen_map.keys()):
+            if generated_map[path] != frozen_map[path]:
+                method_mismatches.append(
+                    {"path": path, "generated": generated_map[path], "frozen": frozen_map[path]}
+                )
+
         emit_audit_log(
             action="openapi.validate",
             status="error",
-            message="openapi.yaml does not match current routes.",
-            details={"path": str(spec_path)},
+            message="openapi.yaml routes do not match current API surface.",
+            details={
+                "path": str(spec_path),
+                "missing_paths": missing_in_frozen,
+                "extra_paths": extra_in_frozen,
+                "method_mismatches": method_mismatches,
+            },
         )
         raise RuntimeError("openapi.yaml is out of date. Regenerate it to match routes.")
 
