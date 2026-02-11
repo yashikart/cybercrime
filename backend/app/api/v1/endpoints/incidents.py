@@ -23,6 +23,7 @@ from app.api.v1.schemas import IncidentReportRequest, IncidentReportResponse
 from app.core.ai_service import generate_ai_conclusion, check_ai_available
 from app.core.ai_orchestrator import call_incident_orchestrator
 from app.core.security import decode_access_token
+from app.core.audit_logging import emit_audit_log
 from synthetic_data_generator.generator import generate_wallet_transactions, random_wallet
 from synthetic_data_generator.suspicious_patterns import (
     calculate_risk_score,
@@ -42,6 +43,8 @@ async def get_current_user_from_request(
     db: Session = Depends(get_db)
 ) -> Optional[User]:
     """Get current user from Authorization header in request"""
+    if getattr(request.state, "current_user", None):
+        return request.state.current_user
     authorization = request.headers.get("Authorization")
     if not authorization:
         return None
@@ -576,7 +579,12 @@ async def analyze_wallet_incident(
             response_data.report_id = str(report.id)
         except Exception as db_error:
             # Log error but don't fail the request
-            print(f"[WARN] Failed to save report to SQL database: {db_error}")
+            emit_audit_log(
+                action="incident.report.save",
+                status="warning",
+                message="Failed to save incident report.",
+                details={"error": str(db_error)},
+            )
 
         return response_data
         
@@ -665,7 +673,12 @@ async def get_incident_reports(
 
     except Exception as e:
         # Log error but return empty list to prevent frontend crashes
-        print(f"[ERROR] Error fetching reports from SQL: {str(e)}")
+        emit_audit_log(
+            action="incident.report.fetch",
+            status="error",
+            message="Error fetching incident reports.",
+            details={"error": str(e)},
+        )
         return []
 
 

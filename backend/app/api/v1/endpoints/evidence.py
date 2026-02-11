@@ -18,6 +18,7 @@ from app.db.models import Evidence, User, Message
 from app.api.v1.schemas import EvidenceResponse
 from app.core.config import settings
 from app.core.security import decode_access_token
+from app.core.audit_logging import emit_audit_log
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -33,6 +34,8 @@ async def get_current_user_from_request(
     db: Session = Depends(get_db)
 ) -> Optional[User]:
     """Get current user from Authorization header in request"""
+    if getattr(request.state, "current_user", None):
+        return request.state.current_user
     authorization = request.headers.get("Authorization")
     if not authorization:
         return None
@@ -266,32 +269,56 @@ async def create_evidence(
                 # Verify notification was created
                 verify_notification = db.query(Message).filter(Message.id == notification.id).first()
                 if verify_notification:
-                    print(f"[NOTIFICATION] ✓ Created evidence upload notification (ID: {notification.id}) for superadmin: {superadmin.email}")
+                    emit_audit_log(
+                        action="evidence.notify",
+                        status="success",
+                        message="Created evidence upload notification.",
+                        entity_type="message",
+                        entity_id=str(notification.id),
+                    )
                 else:
-                    print(f"[NOTIFICATION ERROR] Notification was not saved to database!")
+                    emit_audit_log(
+                        action="evidence.notify",
+                        status="error",
+                        message="Evidence upload notification was not saved.",
+                    )
             else:
-                print(f"[NOTIFICATION WARNING] No superadmin user found in database!")
+                emit_audit_log(
+                    action="evidence.notify",
+                    status="warning",
+                    message="No superadmin user found for evidence notification.",
+                )
         except Exception as e:
             # Don't fail the evidence creation if notification fails
-            import logging
             import traceback
-            error_msg = f"Failed to send superadmin notification for evidence upload: {e}\n{traceback.format_exc()}"
-            logging.error(error_msg)
-            print(f"[NOTIFICATION ERROR] {error_msg}")
+            error_msg = f"Failed to send superadmin notification for evidence upload: {e}"
+            emit_audit_log(
+                action="evidence.notify",
+                status="error",
+                message=error_msg,
+                details={"traceback": traceback.format_exc()},
+            )
         
         return db_evidence
     except HTTPException as he:
         # Re-raise HTTP exceptions as-is
-        import logging
-        logging.error(f"HTTP error creating evidence: {he.detail}")
+        emit_audit_log(
+            action="evidence.create",
+            status="error",
+            message="HTTP error creating evidence.",
+            details={"error": he.detail},
+        )
         raise
     except Exception as e:
         # Log the full error for debugging
-        import logging
         import traceback
         error_msg = f"Error creating evidence: {str(e)}\n{traceback.format_exc()}"
-        logging.error(error_msg)
-        print(f"ERROR: {error_msg}")  # Also print to console for immediate visibility
+        emit_audit_log(
+            action="evidence.create",
+            status="error",
+            message="Error creating evidence.",
+            details={"traceback": error_msg},
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to upload evidence: {str(e)}"

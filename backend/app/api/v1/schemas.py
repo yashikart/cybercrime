@@ -158,11 +158,16 @@ class RiskScoreResponse(RiskScoreBase):
 class AuditLogResponse(BaseModel):
     id: int
     action: str
+    message: Optional[str] = None
     entity_type: Optional[str]
     entity_id: Optional[str]
     status: str
     details: Optional[str]
     user_id: Optional[int]
+    ip_address: Optional[str] = None
+    request_id: Optional[str] = None
+    path: Optional[str] = None
+    method: Optional[str] = None
     timestamp: datetime
     
     class Config:

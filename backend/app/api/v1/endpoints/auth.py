@@ -33,7 +33,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         hashed_password=hashed_password,
         full_name=user.full_name,
-        role=user.role
+        role="investigator"
     )
     db.add(db_user)
     db.commit()
@@ -79,7 +79,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     
     # Create audit log entry for login
     audit_log = AuditLog(
-        action="User Login",
+        action="auth.login",
+        message="User logged in successfully.",
         entity_type="user",
         entity_id=str(user.id),
         status="success",

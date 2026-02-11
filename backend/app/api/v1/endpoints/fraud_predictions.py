@@ -96,12 +96,9 @@ async def get_model_status():
             "metadata": metadata
         }
     except FileNotFoundError:
-        return {
-            "available": False,
-            "message": "Model not trained yet. Run: python ml_training/train_fraud_model.py"
-        }
+        raise HTTPException(
+            status_code=503,
+            detail="Model not trained yet. Run: python ml_training/train_fraud_model.py"
+        )
     except Exception as e:
-        return {
-            "available": False,
-            "error": str(e)
-        }
+        raise HTTPException(status_code=500, detail="Unable to load fraud model.") from e

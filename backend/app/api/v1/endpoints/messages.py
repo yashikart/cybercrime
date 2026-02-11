@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.db.database import get_db
 from app.db.models import Message, User
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -103,11 +104,11 @@ async def broadcast_announcement(
 ):
     """Broadcast an announcement to all investigators"""
     # Get all investigators
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
-    investigators = db.query(User).filter(
-        User.role == "investigator",
-        User.email != superadmin_email
-    ).all()
+    superadmin_email = settings.SUPERADMIN_EMAIL.lower().strip() if settings.SUPERADMIN_EMAIL else None
+    query = db.query(User).filter(User.role == "investigator")
+    if superadmin_email:
+        query = query.filter(User.email != superadmin_email)
+    investigators = query.all()
     
     if not investigators:
         raise HTTPException(status_code=404, detail="No investigators found")

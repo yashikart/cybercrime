@@ -3,24 +3,48 @@ Cybercrime Investigation Dashboard - FastAPI Backend
 Main application entry point
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
+from pathlib import Path
+from uuid import uuid4
+import json
+import yaml
 
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.database import engine, Base, SessionLocal
 from app.db.models import User
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, decode_access_token
+from app.core.audit_logging import configure_logging, emit_audit_log
+from app.core.error_responses import build_error_response
+from app.core.rbac import load_rbac_policy, extract_path_id
 
 
 def init_superadmin():
     """Initialize superadmin account on startup"""
+    if not settings.SUPERADMIN_BOOTSTRAP_ENABLED:
+        emit_audit_log(
+            action="superadmin.bootstrap",
+            status="warning",
+            message="Superadmin bootstrap disabled; skipping initialization.",
+        )
+        return
+    if not settings.SUPERADMIN_EMAIL or not settings.SUPERADMIN_PASSWORD:
+        emit_audit_log(
+            action="superadmin.bootstrap",
+            status="error",
+            message="Superadmin bootstrap missing credentials; skipping initialization.",
+        )
+        return
+
     db = SessionLocal()
     try:
-        superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
-        superadmin_password = "admin"
+        superadmin_email = settings.SUPERADMIN_EMAIL.lower().strip()
+        superadmin_password = settings.SUPERADMIN_PASSWORD
         
         # Check if superadmin already exists
         existing_superadmin = db.query(User).filter(User.email == superadmin_email).first()
@@ -38,34 +62,59 @@ def init_superadmin():
                 )
                 db.add(superadmin)
                 db.commit()
-                print(f"[SUPERADMIN] ✓ Created superadmin account: {superadmin_email}")
+                emit_audit_log(
+                    action="superadmin.bootstrap",
+                    status="success",
+                    message="Created superadmin account.",
+                    entity_type="user",
+                    entity_id=str(superadmin.id),
+                )
             except Exception as hash_error:
-                print(f"[ERROR] Failed to hash password: {hash_error}")
+                emit_audit_log(
+                    action="superadmin.bootstrap",
+                    status="error",
+                    message="Failed to hash superadmin password.",
+                    details={"error": str(hash_error)},
+                )
                 raise
         else:
-            # Ensure superadmin is active and has correct password
+            # Ensure superadmin is active
             updated = False
             if not existing_superadmin.is_active:
                 existing_superadmin.is_active = True
                 updated = True
             
-            # Always update password to ensure it's correct
-            try:
-                correct_hash = get_password_hash(superadmin_password)
-                existing_superadmin.hashed_password = correct_hash
-                updated = True
-                if updated:
-                    db.commit()
-                    print(f"[SUPERADMIN] ✓ Reset superadmin password: {superadmin_email}")
-                else:
-                    print(f"[SUPERADMIN] ✓ Superadmin account verified: {superadmin_email}")
-            except Exception as hash_error:
-                print(f"[ERROR] Failed to hash password: {hash_error}")
-                # Don't raise, just log - account exists, might work with old hash
+            # Only reset password when explicitly requested
+            if settings.SUPERADMIN_BOOTSTRAP_FORCE_RESET:
+                try:
+                    correct_hash = get_password_hash(superadmin_password)
+                    existing_superadmin.hashed_password = correct_hash
+                    updated = True
+                except Exception as hash_error:
+                    emit_audit_log(
+                        action="superadmin.bootstrap",
+                        status="error",
+                        message="Failed to reset superadmin password.",
+                        entity_type="user",
+                        entity_id=str(existing_superadmin.id),
+                        details={"error": str(hash_error)},
+                    )
+            if updated:
+                db.commit()
+            emit_audit_log(
+                action="superadmin.bootstrap",
+                status="success",
+                message="Superadmin account verified.",
+                entity_type="user",
+                entity_id=str(existing_superadmin.id),
+            )
     except Exception as e:
-        import traceback
-        print(f"[ERROR] Failed to initialize superadmin: {e}")
-        traceback.print_exc()
+        emit_audit_log(
+            action="superadmin.bootstrap",
+            status="error",
+            message="Failed to initialize superadmin.",
+            details={"error": str(e)},
+        )
     finally:
         db.close()
 
@@ -121,24 +170,50 @@ def migrate_database():
                             sql_type = get_sql_type(col_type)
                             conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
-                            print(f"[MIGRATION] ✓ Added {col_name} column to users table")
+                            emit_audit_log(
+                                action="migration.users.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to users table.",
+                            )
                         except Exception as e:
-                            print(f"[MIGRATION] Warning: Could not add {col_name} column: {e}")
+                            emit_audit_log(
+                                action="migration.users.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to users table.",
+                                details={"error": str(e)},
+                            )
                             conn.rollback()
         
-        # Check if audit_logs table exists and add ip_address column
+        # Check if audit_logs table exists and add audit metadata columns
         if "audit_logs" in inspector.get_table_names():
             existing_audit_columns = [col["name"] for col in inspector.get_columns("audit_logs")]
             
             with engine.connect() as conn:
-                if "ip_address" not in existing_audit_columns:
-                    try:
-                        conn.execute(text("ALTER TABLE audit_logs ADD COLUMN ip_address VARCHAR"))
-                        conn.commit()
-                        print(f"[MIGRATION] ✓ Added ip_address column to audit_logs table")
-                    except Exception as e:
-                        print(f"[MIGRATION] Warning: Could not add ip_address column to audit_logs: {e}")
-                        conn.rollback()
+                audit_columns_to_add = [
+                    ("ip_address", "VARCHAR"),
+                    ("message", "VARCHAR"),
+                    ("request_id", "VARCHAR"),
+                    ("path", "VARCHAR"),
+                    ("method", "VARCHAR"),
+                ]
+                for col_name, col_type in audit_columns_to_add:
+                    if col_name not in existing_audit_columns:
+                        try:
+                            conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}"))
+                            conn.commit()
+                            emit_audit_log(
+                                action="migration.audit_logs.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to audit_logs table.",
+                            )
+                        except Exception as e:
+                            emit_audit_log(
+                                action="migration.audit_logs.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to audit_logs table.",
+                                details={"error": str(e)},
+                            )
+                            conn.rollback()
         
         # Check if complaints table exists and add location columns
         if "complaints" in inspector.get_table_names():
@@ -160,9 +235,18 @@ def migrate_database():
                             sql_type = get_sql_type(col_type)
                             conn.execute(text(f"ALTER TABLE complaints ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
-                            print(f"[MIGRATION] ✓ Added {col_name} column to complaints table")
+                            emit_audit_log(
+                                action="migration.complaints.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to complaints table.",
+                            )
                         except Exception as e:
-                            print(f"[MIGRATION] Warning: Could not add {col_name} column to complaints: {e}")
+                            emit_audit_log(
+                                action="migration.complaints.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to complaints table.",
+                                details={"error": str(e)},
+                            )
                             conn.rollback()
         
         # Check if evidence table exists and add file storage columns
@@ -182,9 +266,18 @@ def migrate_database():
                             sql_type = get_sql_type(col_type)
                             conn.execute(text(f"ALTER TABLE evidence ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
-                            print(f"[MIGRATION] ✓ Added {col_name} column to evidence table")
+                            emit_audit_log(
+                                action="migration.evidence.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to evidence table.",
+                            )
                         except Exception as e:
-                            print(f"[MIGRATION] Warning: Could not add {col_name} column to evidence: {e}")
+                            emit_audit_log(
+                                action="migration.evidence.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to evidence table.",
+                                details={"error": str(e)},
+                            )
                             conn.rollback()
         
         # Check if incident_reports table exists and add investigator_id column
@@ -196,9 +289,18 @@ def migrate_database():
                     try:
                         conn.execute(text("ALTER TABLE incident_reports ADD COLUMN investigator_id INTEGER"))
                         conn.commit()
-                        print(f"[MIGRATION] ✓ Added investigator_id column to incident_reports table")
+                        emit_audit_log(
+                            action="migration.incident_reports.add_column",
+                            status="success",
+                            message="Added investigator_id column to incident_reports table.",
+                        )
                     except Exception as e:
-                        print(f"[MIGRATION] Warning: Could not add investigator_id column to incident_reports: {e}")
+                        emit_audit_log(
+                            action="migration.incident_reports.add_column",
+                            status="warning",
+                            message="Could not add investigator_id column to incident_reports table.",
+                            details={"error": str(e)},
+                        )
                         conn.rollback()
         
         # Create messages table if it doesn't exist
@@ -206,27 +308,54 @@ def migrate_database():
             try:
                 from app.db.models import Message
                 Message.__table__.create(bind=engine, checkfirst=True)
-                print("[MIGRATION] ✓ Created messages table")
+                emit_audit_log(
+                    action="migration.messages.create_table",
+                    status="success",
+                    message="Created messages table.",
+                )
             except Exception as e:
-                print(f"[MIGRATION] Warning: Could not create messages table: {e}")
+                emit_audit_log(
+                    action="migration.messages.create_table",
+                    status="warning",
+                    message="Could not create messages table.",
+                    details={"error": str(e)},
+                )
         
         # Create fraud_transactions table if it doesn't exist
         if "fraud_transactions" not in inspector.get_table_names():
             try:
                 from app.db.models import FraudTransaction
                 FraudTransaction.__table__.create(bind=engine, checkfirst=True)
-                print("[MIGRATION] ✓ Created fraud_transactions table")
+                emit_audit_log(
+                    action="migration.fraud_transactions.create_table",
+                    status="success",
+                    message="Created fraud_transactions table.",
+                )
             except Exception as e:
-                print(f"[MIGRATION] Warning: Could not create fraud_transactions table: {e}")
+                emit_audit_log(
+                    action="migration.fraud_transactions.create_table",
+                    status="warning",
+                    message="Could not create fraud_transactions table.",
+                    details={"error": str(e)},
+                )
         
         # Create investigator_access_requests table if it doesn't exist
         if "investigator_access_requests" not in inspector.get_table_names():
             try:
                 from app.db.models import InvestigatorAccessRequest
                 InvestigatorAccessRequest.__table__.create(bind=engine, checkfirst=True)
-                print("[MIGRATION] ✓ Created investigator_access_requests table")
+                emit_audit_log(
+                    action="migration.access_requests.create_table",
+                    status="success",
+                    message="Created investigator_access_requests table.",
+                )
             except Exception as e:
-                print(f"[MIGRATION] Warning: Could not create investigator_access_requests table: {e}")
+                emit_audit_log(
+                    action="migration.access_requests.create_table",
+                    status="warning",
+                    message="Could not create investigator_access_requests table.",
+                    details={"error": str(e)},
+                )
         
         # Check if wallets table exists and add freeze status columns
         if "wallets" in inspector.get_table_names():
@@ -250,18 +379,38 @@ def migrate_database():
                             sql_type = get_sql_type(col_type)
                             conn.execute(text(f"ALTER TABLE wallets ADD COLUMN {col_name} {sql_type}"))
                             conn.commit()
-                            print(f"[MIGRATION] ✓ Added {col_name} column to wallets table")
+                            emit_audit_log(
+                                action="migration.wallets.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to wallets table.",
+                            )
                         except Exception as e:
-                            print(f"[MIGRATION] Warning: Could not add {col_name} column to wallets: {e}")
+                            emit_audit_log(
+                                action="migration.wallets.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to wallets table.",
+                                details={"error": str(e)},
+                            )
                             conn.rollback()
     except Exception as e:
-        print(f"[MIGRATION] Error during migration: {e}")
+        emit_audit_log(
+            action="migration.run",
+            status="error",
+            message="Error during migration.",
+            details={"error": str(e)},
+        )
         # Don't fail startup if migration fails - tables will be created on next startup
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan events for startup and shutdown"""
+    configure_logging()
+    policy_path = Path(settings.RBAC_POLICY_PATH)
+    if not policy_path.is_absolute():
+        policy_path = Path(__file__).resolve().parent.parent / policy_path
+    app.state.rbac_policy = load_rbac_policy(policy_path)
+
     # Create database tables
     Base.metadata.create_all(bind=engine)
     
@@ -270,16 +419,23 @@ async def lifespan(app: FastAPI):
     
     # Initialize superadmin account
     init_superadmin()
+
+    validate_openapi_spec(app)
     
     yield
 
+
+docs_url = "/api/docs" if settings.EXPOSE_API_DOCS else None
+redoc_url = "/api/redoc" if settings.EXPOSE_API_DOCS else None
+openapi_url = "/api/openapi.json" if settings.EXPOSE_API_DOCS else None
 
 app = FastAPI(
     title="Cybercrime Investigation API",
     description="Backend API for cybercrime investigation dashboard",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
     lifespan=lifespan
 )
 
@@ -291,6 +447,122 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-Id") or str(uuid4())
+    request.state.request_id = request_id
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        emit_audit_log(
+            action="request.error",
+            status="error",
+            message="Unhandled exception during request.",
+            request_id=request_id,
+            path=request.url.path,
+            method=request.method,
+            ip_address=request.client.host if request.client else None,
+            details={"error": str(exc)},
+        )
+        raise
+    response.headers["X-Request-Id"] = request_id
+    emit_audit_log(
+        action="request.completed",
+        status="success" if response.status_code < 400 else "error",
+        message="Request completed.",
+        request_id=request_id,
+        path=request.url.path,
+        method=request.method,
+        ip_address=request.client.host if request.client else None,
+        details={"status_code": response.status_code},
+    )
+    return response
+
+
+@app.middleware("http")
+async def rbac_middleware(request: Request, call_next):
+    if request.method.upper() == "OPTIONS":
+        return await call_next(request)
+
+    policy = getattr(app.state, "rbac_policy", None)
+    if policy is None:
+        return await call_next(request)
+
+    authorization = request.headers.get("Authorization", "")
+    token = None
+    if authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    elif authorization:
+        token = authorization.strip()
+
+    role = "public"
+    user_id = None
+    if token:
+        payload = decode_access_token(token)
+        if payload:
+            raw_user_id = payload.get("user_id")
+            try:
+                user_id = int(raw_user_id) if raw_user_id is not None else None
+            except (TypeError, ValueError):
+                user_id = None
+            role = payload.get("role") or role
+            if user_id is not None:
+                db = SessionLocal()
+                try:
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if not user or not user.is_active:
+                        role = "public"
+                        user_id = None
+                    else:
+                        role = user.role or role
+                        request.state.current_user = user
+                finally:
+                    db.close()
+
+    request.state.current_role = role
+
+    if not policy.is_allowed(role=role, method=request.method, path=request.url.path):
+        status_code = 401 if role == "public" else 403
+        emit_audit_log(
+            action="rbac.deny",
+            status="warning",
+            message="RBAC denied request.",
+            request_id=getattr(request.state, "request_id", None),
+            path=request.url.path,
+            method=request.method,
+            ip_address=request.client.host if request.client else None,
+            details={"role": role},
+        )
+        payload = build_error_response(
+            code="unauthorized" if role == "public" else "forbidden",
+            message="Authentication required." if role == "public" else "Access denied.",
+            request_id=getattr(request.state, "request_id", None),
+        )
+        return JSONResponse(status_code=status_code, content=payload)
+
+    if role == "investigator" and user_id is not None:
+        path_id = extract_path_id(request.url.path, "investigators")
+        if path_id is not None and path_id != user_id:
+            emit_audit_log(
+                action="rbac.deny",
+                status="warning",
+                message="RBAC denied investigator self-only request.",
+                request_id=getattr(request.state, "request_id", None),
+                path=request.url.path,
+                method=request.method,
+                ip_address=request.client.host if request.client else None,
+                details={"user_id": user_id, "target_id": path_id},
+            )
+            payload = build_error_response(
+                code="forbidden",
+                message="Access denied.",
+                request_id=getattr(request.state, "request_id", None),
+            )
+            return JSONResponse(status_code=403, content=payload)
+
+    return await call_next(request)
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
@@ -313,6 +585,60 @@ async def health_check():
         "status": "healthy",
         "service": "cybercrime-investigation-api"
     }
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    payload = build_error_response(
+        code=f"http_{exc.status_code}",
+        message=str(exc.detail) if exc.detail else "Request failed.",
+        request_id=getattr(request.state, "request_id", None),
+    )
+    return JSONResponse(status_code=exc.status_code, content=payload)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    payload = build_error_response(
+        code="validation_error",
+        message="Validation failed.",
+        request_id=getattr(request.state, "request_id", None),
+        details=exc.errors(),
+    )
+    return JSONResponse(status_code=422, content=payload)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    payload = build_error_response(
+        code="internal_error",
+        message="Internal server error.",
+        request_id=getattr(request.state, "request_id", None),
+    )
+    return JSONResponse(status_code=500, content=payload)
+
+
+def validate_openapi_spec(app: FastAPI) -> None:
+    spec_path = Path(__file__).resolve().parent.parent / "openapi.yaml"
+    if not spec_path.exists():
+        emit_audit_log(
+            action="openapi.validate",
+            status="error",
+            message="openapi.yaml not found.",
+            details={"path": str(spec_path)},
+        )
+        raise RuntimeError("openapi.yaml not found. Generate it before starting the API.")
+
+    generated = app.openapi()
+    frozen = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    if json.dumps(generated, sort_keys=True) != json.dumps(frozen, sort_keys=True):
+        emit_audit_log(
+            action="openapi.validate",
+            status="error",
+            message="openapi.yaml does not match current routes.",
+            details={"path": str(spec_path)},
+        )
+        raise RuntimeError("openapi.yaml is out of date. Regenerate it to match routes.")
 
 
 if __name__ == "__main__":

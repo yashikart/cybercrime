@@ -5,10 +5,8 @@ Uses OpenRouter API (free Qwen 2.5 model) for dynamic analysis
 
 import requests
 from typing import Dict, List, Optional
-import logging
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
+from app.core.audit_logging import emit_audit_log
 
 
 def generate_ai_conclusion(
@@ -103,23 +101,42 @@ Keep it concise, factual, and professional. Do not use markdown formatting."""
                 conclusion = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
                 
                 if conclusion and len(conclusion) > 50:
-                    logger.info(f"AI conclusion generated using {settings.OPENROUTER_MODEL}")
+                    emit_audit_log(
+                        action="ai.conclusion",
+                        status="success",
+                        message="AI conclusion generated.",
+                        details={"model": settings.OPENROUTER_MODEL},
+                    )
                     return conclusion
                 else:
                     raise Exception("Empty or invalid response from AI")
                     
             except Exception as e:
-                logger.warning(f"OpenRouter API failed: {str(e)}")
+                emit_audit_log(
+                    action="ai.conclusion",
+                    status="warning",
+                    message="OpenRouter API failed.",
+                    details={"error": str(e)},
+                )
                 raise
         
         # If no API key, raise to trigger fallback
         raise Exception("No OpenRouter API key configured")
         
     except Exception as e:
-        logger.error(f"AI generation failed: {str(e)}")
+        emit_audit_log(
+            action="ai.conclusion",
+            status="error",
+            message="AI generation failed.",
+            details={"error": str(e)},
+        )
         
         if fallback_to_template:
-            logger.info("Falling back to template-based conclusion")
+            emit_audit_log(
+                action="ai.conclusion",
+                status="warning",
+                message="Falling back to template-based conclusion.",
+            )
             return _generate_template_conclusion(
                 risk_score, risk_level, pattern_type, detected_patterns
             )
@@ -172,5 +189,10 @@ def check_ai_available() -> bool:
             return response.status_code == 200
         return False
     except Exception as e:
-        logger.warning(f"AI check failed: {str(e)}")
+        emit_audit_log(
+            action="ai.check",
+            status="warning",
+            message="AI availability check failed.",
+            details={"error": str(e)},
+        )
         return False

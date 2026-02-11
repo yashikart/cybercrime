@@ -55,7 +55,9 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     HOST: str = "0.0.0.0"
     PORT: int = 3000
-    DEBUG: bool = True
+    DEBUG: bool = False
+    EXPOSE_API_DOCS: bool = False
+    RBAC_POLICY_PATH: str = "rbac-permissions.json"
     
     @field_validator('DEBUG', mode='before')
     @classmethod
@@ -77,9 +79,14 @@ class Settings(BaseSettings):
     ]
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production-use-env-variable"
+    SECRET_KEY: Optional[str] = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    SUPERADMIN_EMAIL: Optional[str] = None
+    SUPERADMIN_PASSWORD: Optional[str] = None
+    SUPERADMIN_BOOTSTRAP_ENABLED: bool = False
+    SUPERADMIN_BOOTSTRAP_FORCE_RESET: bool = False
+    SUPERADMIN_BOOTSTRAP_TOKEN: Optional[str] = None
     
     # Database
     # Use a local SQLite file by default so it works without any external DB server.
@@ -109,19 +116,29 @@ class Settings(BaseSettings):
     # Email Configuration (SMTP - Brevo)
     MAIL_SERVER: str = "smtp-relay.brevo.com"
     MAIL_PORT: int = 587
-    MAIL_USERNAME: str = "9fcd20001@smtp-brevo.com"
-    MAIL_PASSWORD: str = ""  # Legacy Brevo SMTP API key (used only if you enable SMTP)
-    MAIL_FROM: str = "blackholeinfiverse48@gmail.com"
+    MAIL_USERNAME: Optional[str] = None
+    MAIL_PASSWORD: Optional[str] = None  # Legacy Brevo SMTP API key (used only if you enable SMTP)
+    MAIL_FROM: Optional[str] = None
     MAIL_FROM_NAME: str = "Cybercrime Investigation System"
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
     USE_CREDENTIALS: bool = True
     VALIDATE_CERTS: bool = True
+    EMAIL_ENABLED: bool = False
+    SMTP_ENABLED: bool = False
+    FRONTEND_BASE_URL: Optional[str] = None
 
     # Brevo HTTP API (recommended for Render and environments that block SMTP)
     # Set BREVO_API_KEY to your "xkeysib-..." key from Brevo. When present,
     # the app will use the HTTPS API instead of SMTP to send emails.
     BREVO_API_KEY: Optional[str] = None
+
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v):
+        if not v or not str(v).strip():
+            raise ValueError("SECRET_KEY must be set via environment variables.")
+        return v
     
     model_config = SettingsConfigDict(
         env_file=".env",

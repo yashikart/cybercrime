@@ -10,16 +10,23 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
 from app.db.database import get_db, engine
 from app.db.models import User
 from app.core.config import settings
+from app.core.audit_logging import emit_audit_log
 from app.core.security import get_password_hash
 
 router = APIRouter()
+
+
+def _get_superadmin_email() -> Optional[str]:
+    if settings.SUPERADMIN_EMAIL:
+        return settings.SUPERADMIN_EMAIL.lower().strip()
+    return None
 
 
 class SendWelcomeEmailRequest(BaseModel):
@@ -62,6 +69,12 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
     Returns:
         tuple: (success: bool, error_message: str)
     """
+    if not settings.EMAIL_ENABLED:
+        return False, "Email delivery is disabled."
+
+    if not settings.MAIL_FROM:
+        return False, "MAIL_FROM is not configured."
+
     # First try Brevo HTTPS API if API key is configured
     if settings.BREVO_API_KEY:
         try:
@@ -82,7 +95,13 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
                 "api-key": settings.BREVO_API_KEY,
             }
 
-            print(f"[BREVO API] Sending email to {to_email} via HTTPS API...")
+            emit_audit_log(
+                action="email.send",
+                status="success",
+                message="Sending email via Brevo API.",
+                entity_type="email",
+                entity_id=to_email,
+            )
             with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
                 response = client.post(
                     "https://api.brevo.com/v3/smtp/email",
@@ -91,19 +110,48 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
                 )
 
             if 200 <= response.status_code < 300:
-                print(f"[BREVO API] Email sent successfully to {to_email}")
+                emit_audit_log(
+                    action="email.send",
+                    status="success",
+                    message="Email sent via Brevo API.",
+                    entity_type="email",
+                    entity_id=to_email,
+                )
                 return True, ""
 
             error_msg = f"Brevo API error {response.status_code}: {response.text}"
-            print(f"[BREVO API] {error_msg}")
+            emit_audit_log(
+                action="email.send",
+                status="warning",
+                message="Brevo API error.",
+                entity_type="email",
+                entity_id=to_email,
+                details={"error": error_msg},
+            )
             return False, error_msg
 
         except Exception as e:
             error_msg = f"Unexpected error calling Brevo API: {type(e).__name__}: {str(e)}"
-            print(f"[BREVO API] {error_msg}")
+            emit_audit_log(
+                action="email.send",
+                status="error",
+                message="Brevo API exception.",
+                entity_type="email",
+                entity_id=to_email,
+                details={"error": error_msg},
+            )
             import traceback
             traceback.print_exc()
             # fall through to SMTP fallback
+
+    if not settings.SMTP_ENABLED:
+        return False, "SMTP delivery is disabled."
+
+    if not settings.MAIL_SERVER or not settings.MAIL_PORT:
+        return False, "SMTP server configuration is incomplete."
+
+    if settings.USE_CREDENTIALS and (not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD):
+        return False, "SMTP credentials are not configured."
 
     # Fallback: SMTP (useful for local dev if API key not configured)
     server = None
@@ -118,21 +166,51 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
         msg.attach(part1)
         msg.attach(part2)
 
-        print(f"[BREVO SMTP] Connecting to {settings.MAIL_SERVER}:{settings.MAIL_PORT}...")
+        emit_audit_log(
+            action="email.send",
+            status="success",
+            message="Connecting to SMTP server.",
+            entity_type="email",
+            entity_id=to_email,
+        )
         server = smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT, timeout=30)
         server.set_debuglevel(0)
 
         if settings.MAIL_STARTTLS:
-            print("[BREVO SMTP] Starting TLS...")
+            emit_audit_log(
+                action="email.send",
+                status="success",
+                message="Starting SMTP TLS.",
+                entity_type="email",
+                entity_id=to_email,
+            )
             server.starttls()
 
         if settings.USE_CREDENTIALS:
-            print(f"[BREVO SMTP] Authenticating with username: {settings.MAIL_USERNAME}")
+            emit_audit_log(
+                action="email.send",
+                status="success",
+                message="Authenticating with SMTP credentials.",
+                entity_type="email",
+                entity_id=to_email,
+            )
             server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
 
-        print("[BREVO SMTP] Authentication successful, sending email...")
+        emit_audit_log(
+            action="email.send",
+            status="success",
+            message="SMTP authentication successful, sending email.",
+            entity_type="email",
+            entity_id=to_email,
+        )
         server.send_message(msg)
-        print(f"[BREVO SMTP] Email sent successfully to {to_email}")
+        emit_audit_log(
+            action="email.send",
+            status="success",
+            message="Email sent via SMTP.",
+            entity_type="email",
+            entity_id=to_email,
+        )
         return True, ""
 
     except smtplib.SMTPAuthenticationError as e:
@@ -142,26 +220,61 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
             f"2) API key is valid, "
             f"3) Sender email '{settings.MAIL_FROM}' is verified in Brevo dashboard."
         )
-        print(f"[BREVO SMTP] Auth Error: {error_msg}")
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="SMTP authentication failed.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg},
+        )
         return False, error_msg
     except smtplib.SMTPRecipientsRefused as e:
         error_msg = f"Recipient email '{to_email}' was rejected by server: {str(e)}"
-        print(f"[BREVO SMTP] Recipient Error: {error_msg}")
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="SMTP recipient refused.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg},
+        )
         return False, error_msg
     except smtplib.SMTPServerDisconnected as e:
         error_msg = (
             f"SMTP server disconnected: {str(e)}. "
             f"Check your network connection and Brevo server status."
         )
-        print(f"[BREVO SMTP] Connection Error: {error_msg}")
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="SMTP server disconnected.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg},
+        )
         return False, error_msg
     except smtplib.SMTPException as e:
         error_msg = f"SMTP error occurred: {str(e)}"
-        print(f"[BREVO SMTP] Error: {error_msg}")
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="SMTP error occurred.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg},
+        )
         return False, error_msg
     except Exception as e:
         error_msg = f"Unexpected error sending email via SMTP: {type(e).__name__}: {str(e)}"
-        print(f"[BREVO SMTP] {error_msg}")
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="SMTP exception.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg},
+        )
         import traceback
         traceback.print_exc()
         return False, error_msg
@@ -174,9 +287,23 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
 
 
 @router.post("/init-superadmin")
-async def init_superadmin(db: Session = Depends(get_db)):
+async def init_superadmin(request: Request, db: Session = Depends(get_db)):
     """Initialize or reset superadmin account (ensures account exists with correct password)"""
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    if not settings.SUPERADMIN_BOOTSTRAP_ENABLED:
+        raise HTTPException(status_code=403, detail="Superadmin bootstrap is disabled.")
+    if not settings.SUPERADMIN_EMAIL or not settings.SUPERADMIN_PASSWORD:
+        raise HTTPException(status_code=400, detail="Superadmin credentials are not configured.")
+    if not settings.SUPERADMIN_BOOTSTRAP_TOKEN:
+        raise HTTPException(status_code=400, detail="Bootstrap token is not configured.")
+
+    superadmin_email = _get_superadmin_email()
+    if not superadmin_email:
+        raise HTTPException(status_code=400, detail="Superadmin email is not configured.")
+
+    # Require bootstrap token for explicit initialization
+    token_header = request.headers.get("X-Bootstrap-Token")
+    if token_header != settings.SUPERADMIN_BOOTSTRAP_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid bootstrap token.")
     
     # Check if superadmin already exists
     existing_user = db.query(User).filter(User.email == superadmin_email).first()
@@ -185,21 +312,22 @@ async def init_superadmin(db: Session = Depends(get_db)):
         # Update existing account to ensure it's correct
         existing_user.role = "superadmin"
         existing_user.is_active = True
-        existing_user.hashed_password = get_password_hash("admin")  # Always reset to "admin"
+        if settings.SUPERADMIN_BOOTSTRAP_FORCE_RESET:
+            existing_user.hashed_password = get_password_hash(settings.SUPERADMIN_PASSWORD)
         existing_user.full_name = "Super Admin"
         db.commit()
         db.refresh(existing_user)
         
         return {
             "success": True,
-            "message": "Superadmin account verified and password reset to default",
+            "message": "Superadmin account verified",
             "email": existing_user.email,
             "role": existing_user.role,
             "action": "updated"
         }
     else:
         # Create new superadmin account
-        hashed_password = get_password_hash("admin")
+        hashed_password = get_password_hash(settings.SUPERADMIN_PASSWORD)
         superadmin = User(
             email=superadmin_email,
             full_name="Super Admin",
@@ -265,7 +393,9 @@ async def reset_password(request: PasswordResetRequest, db: Session = Depends(ge
 @router.get("/check-superadmin")
 async def check_superadmin(db: Session = Depends(get_db)):
     """Check if superadmin account exists"""
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
+    if not superadmin_email:
+        return {"exists": False, "message": "Superadmin email is not configured."}
     user = db.query(User).filter(User.email == superadmin_email).first()
     
     if user:
@@ -285,7 +415,7 @@ async def check_superadmin(db: Session = Depends(get_db)):
 @router.delete("/delete-all-investigators")
 async def delete_all_investigators(db: Session = Depends(get_db)):
     """Delete all investigator accounts (except superadmin)"""
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
     
     # Get all investigators (excluding superadmin)
     investigators = db.query(User).filter(
@@ -317,13 +447,13 @@ async def delete_all_investigators(db: Session = Depends(get_db)):
 @router.get("/investigators")
 async def list_investigators(db: Session = Depends(get_db)):
     """Get list of all investigators (excludes superadmin)"""
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
     
     # Get all investigators, explicitly excluding superadmin
-    investigators = db.query(User).filter(
-        User.role == "investigator",
-        User.email != superadmin_email
-    ).all()
+    query = db.query(User).filter(User.role == "investigator")
+    if superadmin_email:
+        query = query.filter(User.email != superadmin_email)
+    investigators = query.all()
     
     return {
         "count": len(investigators),
@@ -352,10 +482,7 @@ async def get_location_from_ip(ip_address: Optional[str] = None):
     
     # If no IP provided, try to get from request (would need Request dependency)
     if not ip_address:
-        return {
-            "success": False,
-            "message": "IP address is required"
-        }
+        raise HTTPException(status_code=400, detail="IP address is required")
     
     try:
         # Using ip-api.com free tier (no API key needed, 45 requests/minute limit)
@@ -378,26 +505,17 @@ async def get_location_from_ip(ip_address: Optional[str] = None):
                         "ip": data.get("query")
                     }
                 else:
-                    return {
-                        "success": False,
-                        "message": data.get("message", "Failed to get location")
-                    }
+                    raise HTTPException(status_code=502, detail=data.get("message", "Failed to get location"))
             else:
-                return {
-                    "success": False,
-                    "message": f"API returned status {response.status_code}"
-                }
+                raise HTTPException(status_code=502, detail=f"API returned status {response.status_code}")
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"Error fetching location: {str(e)}"
-        }
+        raise HTTPException(status_code=500, detail=f"Error fetching location: {str(e)}")
 
 
 @router.delete("/investigators/{investigator_id}")
 async def delete_investigator(investigator_id: int, db: Session = Depends(get_db)):
     """Delete a single investigator by ID"""
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
     
     # Find the investigator
     investigator = db.query(User).filter(User.id == investigator_id).first()
@@ -409,7 +527,7 @@ async def delete_investigator(investigator_id: int, db: Session = Depends(get_db
         )
     
     # Prevent deletion of superadmin
-    if investigator.email.lower().strip() == superadmin_email:
+    if superadmin_email and investigator.email.lower().strip() == superadmin_email:
         raise HTTPException(
             status_code=400,
             detail="Cannot delete superadmin account"
@@ -494,7 +612,10 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
     
     # Generate password reset token (in production, store this in DB with expiration)
     reset_token = secrets.token_urlsafe(32)
-    reset_link = f"http://localhost:5173/reset-password?token={reset_token}&email={request.email}"
+    base_url = settings.FRONTEND_BASE_URL
+    if not base_url:
+        raise HTTPException(status_code=500, detail="FRONTEND_BASE_URL is not configured.")
+    reset_link = f"{base_url.rstrip('/')}/reset-password?token={reset_token}&email={request.email}"
     
     # Email content
     subject = "Welcome to Cybercrime Investigation System"
@@ -586,8 +707,7 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
         "message": f"Investigator account created and welcome email sent successfully to {request.email}",
         "user_id": new_user.id,
         "email": new_user.email,
-        "password": password,  # Return password so admin can see it (in production, don't return this)
-        "reset_link": reset_link
+        "reset_link": reset_link,
     }
 
 
@@ -790,13 +910,13 @@ async def get_all_investigators_activity(db: Session = Depends(get_db)):
     from sqlalchemy import func, and_
     from app.db.models import Evidence, Complaint, IncidentReport, WatchlistWallet, User
     
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
     
     # Get all investigators
-    investigators = db.query(User).filter(
-        User.role == "investigator",
-        User.email != superadmin_email
-    ).all()
+    query = db.query(User).filter(User.role == "investigator")
+    if superadmin_email:
+        query = query.filter(User.email != superadmin_email)
+    investigators = query.all()
     
     # Calculate date ranges
     now = datetime.utcnow()
@@ -1004,7 +1124,7 @@ async def bulk_investigator_action(
     """Perform bulk actions on investigators"""
     from app.db.models import User
     
-    superadmin_email = "blackholeinfiverse48@gmail.com".lower().strip()
+    superadmin_email = _get_superadmin_email()
     
     results = []
     
@@ -1015,7 +1135,7 @@ async def bulk_investigator_action(
             results.append({"id": inv_id, "success": False, "message": "Investigator not found"})
             continue
         
-        if investigator.email.lower().strip() == superadmin_email:
+        if superadmin_email and investigator.email.lower().strip() == superadmin_email:
             results.append({"id": inv_id, "success": False, "message": "Cannot modify superadmin"})
             continue
         

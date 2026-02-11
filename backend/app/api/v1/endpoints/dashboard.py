@@ -15,6 +15,7 @@ from app.db.database import get_db
 from app.db.models import AuditLog, Complaint, IncidentReport, Message, InvestigatorAccessRequest, User
 from app.core.ai_client import call_openrouter_json
 from app.core.security import decode_access_token
+from app.core.audit_logging import emit_audit_log
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -92,7 +93,7 @@ async def get_activity_feed(
                 "raw_action": action,
                 "entity_type": log.entity_type,
                 "entity_id": log.entity_id,
-                "summary": log.details or "",
+                "summary": log.message or log.details or "",
                 "severity": severity,
                 "ip_address": log.ip_address,
                 "is_ai": "ai" in action.lower(),
@@ -221,8 +222,12 @@ async def get_current_user_optional(
         return user
     except Exception as e:
         # Log error but don't fail - just return None
-        import logging
-        logging.getLogger(__name__).warning(f"Error getting current user: {e}")
+        emit_audit_log(
+            action="auth.optional_user",
+            status="warning",
+            message="Failed to resolve optional user.",
+            details={"error": str(e)},
+        )
         return None
 
 

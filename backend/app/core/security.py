@@ -7,6 +7,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
+from app.core.audit_logging import emit_audit_log
 import bcrypt
 
 # Use bcrypt directly to avoid passlib compatibility issues
@@ -50,7 +51,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
             return pwd_context.verify(plain_password, hashed_password)
         except:
-            print(f"Password verification error: {e}")
+            emit_audit_log(
+                action="auth.verify_password",
+                status="error",
+                message="Password verification error.",
+                details={"error": str(e)},
+            )
             return False
 
 

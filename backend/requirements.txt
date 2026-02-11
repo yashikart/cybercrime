@@ -31,6 +31,7 @@ requests>=2.32.0
 httpx>=0.27.0
 python-dateutil>=2.9.0
 aiofiles>=24.1.0
+PyYAML>=6.0.1
 
 # AI (Ollama - Free, Local LLM)
 ollama>=0.3.0

@@ -138,12 +138,16 @@ class AuditLog(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     action = Column(String, nullable=False)
+    message = Column(String, nullable=True)
     entity_type = Column(String)
     entity_id = Column(String)
     status = Column(String, default="success")  # success, warning, error
     details = Column(Text)
     user_id = Column(Integer, ForeignKey("users.id"))
     ip_address = Column(String, nullable=True)  # Track IP address
+    request_id = Column(String, nullable=True)
+    path = Column(String, nullable=True)
+    method = Column(String, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

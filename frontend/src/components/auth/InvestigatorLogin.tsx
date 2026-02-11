@@ -54,7 +54,6 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
       const formData = new FormData();
       formData.append("username", normalizedEmail); // OAuth2 uses "username" field for email
       formData.append("password", password);
-
       const response = await fetch(apiUrl("auth/login"), {
         method: "POST",
         body: formData,

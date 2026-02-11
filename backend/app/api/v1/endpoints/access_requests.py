@@ -2,13 +2,14 @@
 Investigator Access Request endpoints
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
 from app.db.database import get_db
 from app.db.models import InvestigatorAccessRequest, User
 from app.core.security import get_password_hash
+from app.core.audit_logging import emit_audit_log
 
 router = APIRouter()
 
@@ -96,8 +97,12 @@ async def create_access_request(
             db.commit()
     except Exception as e:
         # Don't fail the request creation if notification fails
-        import logging
-        logging.getLogger(__name__).warning(f"Failed to create notification for access request: {e}")
+        emit_audit_log(
+            action="access_request.notify",
+            status="warning",
+            message="Failed to create notification for access request.",
+            details={"error": str(e)},
+        )
     
     return db_request.to_dict()
 
@@ -133,6 +138,7 @@ async def get_access_request(
 async def review_access_request(
     request_id: int,
     update: AccessRequestUpdate,
+    request: Request,
     reviewed_by: Optional[int] = None,  # Superadmin user ID
     db: Session = Depends(get_db)
 ):
@@ -157,6 +163,8 @@ async def review_access_request(
     
     # Update request status
     request.status = update.status
+    if getattr(request.state, "current_user", None):
+        reviewed_by = request.state.current_user.id
     request.reviewed_by = reviewed_by
     request.reviewed_at = datetime.utcnow()
     if update.status == "rejected" and update.rejection_reason:

@@ -49,11 +49,7 @@ async def get_rl_status():
             **stats
         }
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "model_loaded": False
-        }
+        raise HTTPException(status_code=503, detail="RL engine is unavailable.") from e
 
 
 @router.post("/predict")
