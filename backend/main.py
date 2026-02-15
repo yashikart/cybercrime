@@ -440,9 +440,24 @@ app = FastAPI(
 )
 
 # CORS Configuration
+# Allow all Render subdomains dynamically
+import os
+
+cors_origins = settings.CORS_ORIGINS.copy() if settings.CORS_ORIGINS else []
+# Add Render frontend URL explicitly
+cors_origins.append("https://cybercrime-frontend.onrender.com")
+
+# Remove duplicates while preserving order
+seen = set()
+cors_origins = [x for x in cors_origins if not (x in seen or seen.add(x))]
+
+# Log CORS origins for debugging
+print(f"[INFO] CORS Origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",  # Allow all Render subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
