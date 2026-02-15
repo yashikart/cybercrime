@@ -460,7 +460,7 @@ print(f"[INFO] CORS Origins configured: {cors_origins}")
 print(f"[INFO] CORS Regex pattern: https://.*\\.onrender\\.com")
 print(f"[INFO] Production mode: {is_production}")
 
-# Explicit OPTIONS handler for all routes (must be before CORS middleware)
+# Explicit OPTIONS handler for all routes
 @app.options("/{full_path:path}")
 async def options_handler(request: Request):
     """Handle all OPTIONS requests explicitly"""
@@ -470,18 +470,7 @@ async def options_handler(request: Request):
     response.headers["Access-Control-Max-Age"] = "3600"
     return response
 
-# CORS middleware must be added BEFORE other middleware
-# Use both allow_origins and allow_origin_regex for maximum compatibility
-# Note: Cannot use allow_origins=["*"] with allow_credentials=True
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com",  # Allow all Render subdomains
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+# CORS middleware - will be added at the end so it runs first (FastAPI middleware runs in reverse order)
 
 
 def add_cors_headers(response, origin: str):
