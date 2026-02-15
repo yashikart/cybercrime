@@ -79,7 +79,7 @@ export function LandingPage({ setCurrentPage }: LandingPageProps) {
           </div>
 
           <h1 className="text-6xl md:text-7xl mb-4 bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-500 bg-clip-text text-transparent font-bold">
-            CYBERCRIME PORTAL
+            Rakshan
           </h1>
           <div className="h-1 w-48 mx-auto bg-gradient-to-r from-transparent via-emerald-400 to-transparent mb-4"></div>
           <p className="text-gray-300 text-lg md:text-xl flex items-center justify-center gap-2 font-mono mb-2">
@@ -421,7 +421,7 @@ export function LandingPage({ setCurrentPage }: LandingPageProps) {
             AES-256 | RSA-4096 | SHA-512 | TLS 1.3
           </p>
           <p className="text-xs text-gray-800 font-mono mt-2">
-            © 2024 Cybercrime Investigation Portal | All Rights Reserved
+            © 2024 Rakshan | All Rights Reserved
           </p>
         </div>
       </div>
