@@ -668,12 +668,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    origin = request.headers.get("origin")
     payload = build_error_response(
         code="internal_error",
         message="Internal server error.",
         request_id=getattr(request.state, "request_id", None),
     )
-    return JSONResponse(status_code=500, content=payload)
+    response = JSONResponse(status_code=500, content=payload)
+    add_cors_headers(response, origin)
+    return response
 
 
 def validate_openapi_spec(app: FastAPI) -> None:
