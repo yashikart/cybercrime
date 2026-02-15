@@ -460,6 +460,16 @@ print(f"[INFO] CORS Origins configured: {cors_origins}")
 print(f"[INFO] CORS Regex pattern: https://.*\\.onrender\\.com")
 print(f"[INFO] Production mode: {is_production}")
 
+# Explicit OPTIONS handler for all routes (must be before CORS middleware)
+@app.options("/{full_path:path}")
+async def options_handler(request: Request):
+    """Handle all OPTIONS requests explicitly"""
+    origin = request.headers.get("origin")
+    response = JSONResponse(content={}, status_code=200)
+    add_cors_headers(response, origin)
+    response.headers["Access-Control-Max-Age"] = "3600"
+    return response
+
 # CORS middleware must be added BEFORE other middleware
 # Use both allow_origins and allow_origin_regex for maximum compatibility
 # Note: Cannot use allow_origins=["*"] with allow_credentials=True
@@ -486,6 +496,23 @@ def add_cors_headers(response, origin: str):
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
             response.headers["Access-Control-Allow-Headers"] = "*"
             response.headers["Access-Control-Expose-Headers"] = "*"
+
+@app.middleware("http")
+async def cors_early_middleware(request: Request, call_next):
+    """Add CORS headers as early as possible"""
+    origin = request.headers.get("origin")
+    
+    # Handle OPTIONS preflight requests immediately
+    if request.method.upper() == "OPTIONS":
+        response = JSONResponse(content={}, status_code=200)
+        add_cors_headers(response, origin)
+        response.headers["Access-Control-Max-Age"] = "3600"
+        return response
+    
+    response = await call_next(request)
+    # Ensure CORS headers are always present
+    add_cors_headers(response, origin)
+    return response
 
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
