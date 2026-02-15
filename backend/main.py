@@ -549,6 +549,18 @@ async def request_context_middleware(request: Request, call_next):
     return response
 
 
+# CORS middleware must be added LAST so it runs FIRST (FastAPI middleware runs in reverse order)
+# Use both allow_origins and allow_origin_regex for maximum compatibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",  # Allow all Render subdomains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 @app.middleware("http")
 async def rbac_middleware(request: Request, call_next):
     if request.method.upper() == "OPTIONS":
