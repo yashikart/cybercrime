@@ -408,16 +408,14 @@ function IncidentReportSection({ investigatorId }: { investigatorId: number | nu
           <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-red-500/20 rounded-lg border border-emerald-500/30">
             <FileText className="w-5 h-5 text-emerald-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-emerald-400 font-mono">Incident Report</h3>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 font-mono">AI-powered wallet analysis and fraud detection</p>
-                <TextToSpeechIconButton
-                  text="AI Analysis. AI-powered wallet analysis and fraud detection. Enter wallet address and get detailed AI-powered fraud analysis."
-                  className="ml-2"
-                />
-              </div>
+            <p className="text-xs text-gray-500 font-mono">AI-powered wallet analysis and fraud detection</p>
           </div>
+          <TextToSpeechIconButton
+            text="Incident Report. AI-powered wallet analysis and fraud detection. Enter wallet address and get detailed AI-powered fraud analysis."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-red-950/20 border border-emerald-500/20 rounded-lg">
@@ -719,16 +717,14 @@ function EvidenceUploadSection() {
           <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
             <UploadCloud className="w-5 h-5 text-cyan-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-cyan-400 font-mono">Evidence Upload</h3>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500 font-mono">Securely upload and manage case evidence files</p>
-              <TextToSpeechIconButton
-                text="Evidence Upload. Securely upload and manage case evidence files. Upload files linked to your assigned cases. Add descriptions or notes for each file. Files stored with hash and timestamp for authenticity."
-                className="ml-2"
-              />
-            </div>
+            <p className="text-xs text-gray-500 font-mono">Securely upload and manage case evidence files</p>
           </div>
+          <TextToSpeechIconButton
+            text="Evidence Upload. Securely upload and manage case evidence files. Upload files linked to your assigned cases. Add descriptions or notes for each file. Files stored with hash and timestamp for authenticity."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
@@ -1035,10 +1031,14 @@ function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
           <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-lg border border-emerald-500/30">
             <FolderOpen className="w-5 h-5 text-emerald-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-emerald-400 font-mono">Evidence Library</h3>
             <p className="text-xs text-gray-500 font-mono">Comprehensive evidence management and tracking</p>
           </div>
+          <TextToSpeechIconButton
+            text="Evidence Library. Comprehensive evidence management and tracking. View Files. Browse and download all uploaded evidence files. Track Status. Monitor evidence status across all cases. ML Analysis. View ML analysis results for all cases. Audit Trail. Maintain clear audit trail of all actions."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
@@ -1049,10 +1049,6 @@ function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
               <p className="text-sm text-emerald-400 font-mono mb-1">View Files</p>
               <p className="text-xs text-gray-400 font-mono">Browse and download all uploaded evidence files</p>
             </div>
-            <TextToSpeechIconButton
-              text="Evidence Library. View Files. Browse and download all uploaded evidence files. Track Status. Monitor evidence status across all cases. ML Analysis. View ML analysis results for all cases. Audit Trail. Maintain clear audit trail of all actions."
-              className="ml-2"
-            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
@@ -1386,10 +1382,14 @@ function WatchlistSection() {
           <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-lg border border-emerald-500/30">
             <Shield className="w-5 h-5 text-emerald-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-emerald-400 font-mono">Watchlist & Monitoring</h3>
             <p className="text-xs text-gray-500 font-mono">Track and monitor high-risk wallets continuously</p>
           </div>
+          <TextToSpeechIconButton
+            text="Watchlist and Monitoring. Track and monitor high-risk wallets continuously. Save to Watchlist. Add high-risk wallets for quick re-analysis. Batch Analysis. Run analysis on all wallets to generate reports. Real-time Status. View latest risk scores and check times."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
@@ -1400,10 +1400,6 @@ function WatchlistSection() {
               <p className="text-sm text-emerald-400 font-mono mb-1">Save to Watchlist</p>
               <p className="text-xs text-gray-400 font-mono">Add high-risk wallets for quick re-analysis</p>
             </div>
-            <TextToSpeechIconButton
-              text="Watchlist and Monitoring. Save to Watchlist. Add high-risk wallets for quick re-analysis. Batch Analysis. Run analysis on all wallets to generate reports. Real-time Status. View latest risk scores and check times."
-              className="ml-2"
-            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
@@ -1737,10 +1733,14 @@ function AIAnalysisSection() {
           <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
             <Brain className="w-5 h-5 text-cyan-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-cyan-400 font-mono">AI Analysis History</h3>
             <p className="text-xs text-gray-500 font-mono">View and manage all incident reports and analysis</p>
           </div>
+          <TextToSpeechIconButton
+            text="AI Analysis History. View and manage all incident reports and analysis. View Reports. Browse all incident reports and analysis history. Track Status. Monitor risk scores, patterns, and case status. Manage Reports. Update report status and add investigator notes. Filter and Search. Search and filter through investigation reports."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
@@ -1751,10 +1751,6 @@ function AIAnalysisSection() {
               <p className="text-sm text-cyan-400 font-mono mb-1">View Reports</p>
               <p className="text-xs text-gray-400 font-mono">Browse all incident reports and analysis history</p>
             </div>
-            <TextToSpeechIconButton
-              text="AI Analysis History. View Reports. Browse all incident reports and analysis history. Track Status. Monitor risk scores, patterns, and case status. Manage Reports. Update report status and add investigator notes. Filter and Search. Search and filter through investigation reports."
-              className="ml-2"
-            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
@@ -2877,10 +2873,14 @@ function ComplaintHistorySection() {
           <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 rounded-lg border border-cyan-500/30">
             <Clipboard className="w-5 h-5 text-cyan-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg text-cyan-400 font-mono">Complaint History</h3>
             <p className="text-xs text-gray-500 font-mono">Manage and track all filed complaints</p>
           </div>
+          <TextToSpeechIconButton
+            text="Complaint History. Manage and track all filed complaints. View All Complaints. Browse all filed wallet complaints in one place. Track Status. Monitor complaint status and updates in real-time. Access Details. View full complaint details and officer information."
+            className="ml-2"
+          />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
@@ -2891,10 +2891,6 @@ function ComplaintHistorySection() {
               <p className="text-sm text-cyan-400 font-mono mb-1">View All Complaints</p>
               <p className="text-xs text-gray-400 font-mono">Browse all filed wallet complaints in one place</p>
             </div>
-            <TextToSpeechIconButton
-              text="Complaint History. View All Complaints. Browse all filed wallet complaints in one place. Track Status. Monitor complaint status and updates in real-time. Access Details. View full complaint details and officer information."
-              className="ml-2"
-            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
