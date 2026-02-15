@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Shield, FileText, Upload, FolderOpen, Brain, Phone, LogOut, Menu, X, Activity, User, RefreshCw, Bot, AlertTriangle, UploadCloud, Check, Lock, Search, Download, Calendar, Clock, Eye, EyeOff, BarChart3, Clipboard, MapPin, Mail, PhoneCall, Filter, MoreVertical, KeyRound, CheckCircle, XCircle, Bell, ChevronDown, Send, TrendingUp, Target, Award, Loader2 } from "lucide-react";
+import { ttsService } from "@/utils/textToSpeech";
+import { TextToSpeechIconButton } from "../ui/TextToSpeechButton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid } from "recharts";
 import { IncidentReportDisplay } from "./IncidentReportDisplay";
@@ -408,7 +410,13 @@ function IncidentReportSection({ investigatorId }: { investigatorId: number | nu
           </div>
           <div>
             <h3 className="text-lg text-emerald-400 font-mono">Incident Report</h3>
-            <p className="text-xs text-gray-500 font-mono">AI-powered wallet analysis and fraud detection</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500 font-mono">AI-powered wallet analysis and fraud detection</p>
+                <TextToSpeechIconButton
+                  text="AI Analysis. AI-powered wallet analysis and fraud detection. Enter wallet address and get detailed AI-powered fraud analysis."
+                  className="ml-2"
+                />
+              </div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -713,7 +721,13 @@ function EvidenceUploadSection() {
           </div>
           <div>
             <h3 className="text-lg text-cyan-400 font-mono">Evidence Upload</h3>
-            <p className="text-xs text-gray-500 font-mono">Securely upload and manage case evidence files</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 font-mono">Securely upload and manage case evidence files</p>
+              <TextToSpeechIconButton
+                text="Evidence Upload. Securely upload and manage case evidence files. Upload files linked to your assigned cases. Add descriptions or notes for each file. Files stored with hash and timestamp for authenticity."
+                className="ml-2"
+              />
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1031,10 +1045,14 @@ function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
               <Eye className="w-4 h-4 text-emerald-400" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-emerald-400 font-mono mb-1">View Files</p>
               <p className="text-xs text-gray-400 font-mono">Browse and download all uploaded evidence files</p>
             </div>
+            <TextToSpeechIconButton
+              text="Evidence Library. View Files. Browse and download all uploaded evidence files. Track Status. Monitor evidence status across all cases. ML Analysis. View ML analysis results for all cases. Audit Trail. Maintain clear audit trail of all actions."
+              className="ml-2"
+            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
@@ -1378,10 +1396,14 @@ function WatchlistSection() {
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-emerald-400 font-mono mb-1">Save to Watchlist</p>
               <p className="text-xs text-gray-400 font-mono">Add high-risk wallets for quick re-analysis</p>
             </div>
+            <TextToSpeechIconButton
+              text="Watchlist and Monitoring. Save to Watchlist. Add high-risk wallets for quick re-analysis. Batch Analysis. Run analysis on all wallets to generate reports. Real-time Status. View latest risk scores and check times."
+              className="ml-2"
+            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-950/20 to-cyan-950/20 border border-emerald-500/20 rounded-lg">
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
@@ -1725,10 +1747,14 @@ function AIAnalysisSection() {
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
               <BarChart3 className="w-4 h-4 text-cyan-400" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-cyan-400 font-mono mb-1">View Reports</p>
               <p className="text-xs text-gray-400 font-mono">Browse all incident reports and analysis history</p>
             </div>
+            <TextToSpeechIconButton
+              text="AI Analysis History. View Reports. Browse all incident reports and analysis history. Track Status. Monitor risk scores, patterns, and case status. Manage Reports. Update report status and add investigator notes. Filter and Search. Search and filter through investigation reports."
+              className="ml-2"
+            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
@@ -2861,10 +2887,14 @@ function ComplaintHistorySection() {
             <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
               <FileText className="w-4 h-4 text-cyan-400" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-cyan-400 font-mono mb-1">View All Complaints</p>
               <p className="text-xs text-gray-400 font-mono">Browse all filed wallet complaints in one place</p>
             </div>
+            <TextToSpeechIconButton
+              text="Complaint History. View All Complaints. Browse all filed wallet complaints in one place. Track Status. Monitor complaint status and updates in real-time. Access Details. View full complaint details and officer information."
+              className="ml-2"
+            />
           </div>
           <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-cyan-950/20 to-emerald-950/20 border border-cyan-500/20 rounded-lg">
             <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
@@ -3330,7 +3360,16 @@ function NotificationBell({
       );
       if (response.ok) {
         const data = await response.json();
-        setRecentMessages(Array.isArray(data) ? data : (data.messages || []));
+        const messages = Array.isArray(data) ? data : (data.messages || []);
+        setRecentMessages(messages);
+        
+        // Auto-read unread messages
+        const unreadMessages = messages.filter((msg: any) => !msg.is_read);
+        if (unreadMessages.length > 0) {
+          const latestUnread = unreadMessages[0];
+          const notificationText = `New ${latestUnread.is_broadcast ? 'announcement' : 'message'}: ${latestUnread.subject}. ${latestUnread.content.substring(0, 100)}`;
+          ttsService.speakNotification(notificationText);
+        }
       }
     } catch (error) {
       console.error("Error fetching recent messages:", error);
@@ -3720,20 +3759,26 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
                       </span>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMessage(message);
-                      if (!message.is_read) {
-                        handleMarkAsRead(message.id);
-                      }
-                    }}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <TextToSpeechIconButton
+                      text={`${message.is_broadcast ? 'Broadcast' : 'Message'} from ${message.sender_email || 'System'}: ${message.subject}. ${message.content}`}
+                      className="mr-1"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMessage(message);
+                        if (!message.is_read) {
+                          handleMarkAsRead(message.id);
+                        }
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -3746,18 +3791,24 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900/95 to-black/95 backdrop-blur-xl border border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gray-900/95 backdrop-blur-xl border-b border-purple-500/30 p-6 flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <h3 className="text-xl text-purple-400 font-mono mb-1">{selectedMessage.subject}</h3>
                 <p className="text-gray-500 font-mono text-sm">
                   From: {selectedMessage.sender_email || "System"}
                 </p>
               </div>
-              <Button
-                onClick={() => setSelectedMessage(null)}
-                className="h-8 w-8 p-0 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 text-red-400"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <TextToSpeechIconButton
+                  text={`${selectedMessage.is_broadcast ? 'Broadcast message' : 'Message'} from ${selectedMessage.sender_email || 'System'}. Subject: ${selectedMessage.subject}. ${selectedMessage.content}`}
+                  className="mr-2"
+                />
+                <Button
+                  onClick={() => setSelectedMessage(null)}
+                  className="h-8 w-8 p-0 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 text-red-400"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-2">

@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Download, AlertTriangle, TrendingUp, Users, ArrowRightLeft, Clock, CheckCircle2, FileText, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
+import { TextToSpeechIconButton } from "../ui/TextToSpeechButton";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -147,23 +148,29 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-mono text-emerald-400">Case Overview</h2>
-          <Button
-            onClick={handleDownloadPDF}
-            disabled={isGeneratingPDF}
-            className="bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:text-emerald-300 font-mono text-sm"
-          >
-            {isGeneratingPDF ? (
-              <>
-                <span className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin mr-2"></span>
-                Generating...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4 mr-2" />
-                Download Investigation Report
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <TextToSpeechIconButton
+              text={`Case Overview. Wallet address: ${reportData.wallet}. Risk level: ${reportData.risk_level}. Risk score: ${(reportData.risk_score * 100).toFixed(0)} percent. Primary pattern: ${reportData.summary.pattern_type}.`}
+              className="mr-2"
+            />
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className="bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-400 hover:text-emerald-300 font-mono text-sm"
+            >
+              {isGeneratingPDF ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin mr-2"></span>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Investigation Report
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -208,10 +215,16 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
 
       {/* Transaction Summary */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
-        <h3 className="text-lg text-emerald-400 font-mono mb-4 flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" />
-          Transaction Summary
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg text-emerald-400 font-mono flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Transaction Summary
+          </h3>
+          <TextToSpeechIconButton
+            text={`Transaction Summary. Total incoming: ${formatCurrency(reportData.summary.total_in)}. Total outgoing: ${formatCurrency(reportData.summary.total_out)}. Net flow: ${formatCurrency(netFlow)}. Transaction count: ${reportData.summary.tx_count}. Unique senders: ${reportData.summary.unique_senders}. Unique receivers: ${reportData.summary.unique_receivers}.`}
+            className="ml-2"
+          />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-black/40 border border-emerald-500/20 rounded-lg p-4">
             <p className="text-xs text-gray-500 font-mono mb-1">Total Incoming</p>
@@ -297,10 +310,16 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
 
       {/* System Conclusion */}
       <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/30 rounded-lg p-6">
-        <h3 className="text-lg text-emerald-400 font-mono mb-4 flex items-center gap-2">
-          <FileText className="w-5 h-5" />
-          System Conclusion
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg text-emerald-400 font-mono flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            System Conclusion
+          </h3>
+          <TextToSpeechIconButton
+            text={`System Conclusion. ${reportData.system_conclusion}`}
+            className="ml-2"
+          />
+        </div>
         <div className="bg-black/40 border border-emerald-500/20 rounded-lg p-4">
           <p className="text-gray-300 font-mono leading-relaxed">{reportData.system_conclusion}</p>
         </div>

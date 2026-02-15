@@ -3,7 +3,9 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { ThreatMap } from "./ThreatMap";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ttsService } from "@/utils/textToSpeech";
+import { TextToSpeechIconButton } from "../ui/TextToSpeechButton";
 
 import { apiUrl } from "@/lib/api";
 interface ComplaintLocation {
@@ -96,6 +98,7 @@ export function DashboardContent() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [riskTrends, setRiskTrends] = useState<RiskTrendsData | null>(null);
+  const prevNotificationsRef = useRef<Set<string>>(new Set());
   const [stats, setStats] = useState<DashboardStats>({
     totalComplaints: 0,
     totalInvestigators: 0,
@@ -171,7 +174,22 @@ export function DashboardContent() {
         });
         if (notifRes.ok) {
           const notifData = await notifRes.json();
-          setNotifications(notifData.notifications || []);
+          const newNotifications = notifData.notifications || [];
+          setNotifications(newNotifications);
+          
+          // Auto-read new unread notifications
+          const unreadNotifications = newNotifications.filter((n: NotificationItem) => !n.read);
+          const newUnreadIds = new Set(unreadNotifications.map((n: NotificationItem) => n.id));
+          const trulyNew = unreadNotifications.filter((n: NotificationItem) => !prevNotificationsRef.current.has(n.id));
+          
+          if (trulyNew.length > 0) {
+            const latest = trulyNew[0];
+            const notificationText = `New ${latest.severity} ${latest.type} notification: ${latest.title}. ${latest.message.substring(0, 100)}`;
+            ttsService.speakNotification(notificationText);
+          }
+          
+          // Update previous notifications set
+          prevNotificationsRef.current = newUnreadIds;
         }
       } catch (e) {
         console.error("Error fetching notifications:", e);
@@ -648,11 +666,17 @@ export function DashboardContent() {
                         <p className="text-xs font-mono text-gray-200 truncate">
                           {notif.title}
                         </p>
-                        <span
-                          className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-${sevColor}-950/40 text-${sevColor}-400 border border-${sevColor}-500/40`}
-                        >
-                          {notif.type.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <TextToSpeechIconButton
+                            text={`${notif.severity} ${notif.type} notification: ${notif.title}. ${notif.message || ''}`}
+                            className="ml-1"
+                          />
+                          <span
+                            className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-${sevColor}-950/40 text-${sevColor}-400 border border-${sevColor}-500/40`}
+                          >
+                            {notif.type.toUpperCase()}
+                          </span>
+                        </div>
                       </div>
                       {notif.message && (
                         <p className="text-[11px] text-gray-500 font-mono line-clamp-2">
