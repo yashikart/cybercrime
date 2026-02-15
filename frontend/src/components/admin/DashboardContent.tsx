@@ -179,8 +179,8 @@ export function DashboardContent() {
           
           // Auto-read new unread notifications
           const unreadNotifications = newNotifications.filter((n: NotificationItem) => !n.read);
-          const newUnreadIds = new Set(unreadNotifications.map((n: NotificationItem) => n.id));
-          const trulyNew = unreadNotifications.filter((n: NotificationItem) => !prevNotificationsRef.current.has(n.id));
+          const newUnreadIds = new Set<string>(unreadNotifications.map((n: NotificationItem) => String(n.id)));
+          const trulyNew = unreadNotifications.filter((n: NotificationItem) => !prevNotificationsRef.current.has(String(n.id)));
           
           if (trulyNew.length > 0) {
             const latest = trulyNew[0];

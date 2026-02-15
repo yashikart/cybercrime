@@ -14,7 +14,7 @@ interface TextToSpeechButtonProps {
   autoRead?: boolean;
   className?: string;
   variant?: "default" | "outline" | "ghost";
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "lg" | "icon" | "default";
   disabled?: boolean;
 }
 
@@ -24,7 +24,7 @@ export function TextToSpeechButton({
   autoRead = false,
   className = "",
   variant = "ghost",
-  size = "sm",
+  size = "sm" as const,
   disabled = false
 }: TextToSpeechButtonProps) {
   const [isPlaying, setIsPlaying] = useState(false);
