@@ -474,14 +474,36 @@ app.add_middleware(
 )
 
 
+def add_cors_headers(response, origin: str):
+    """Add CORS headers to response"""
+    if origin:
+        is_render_domain = origin.endswith(".onrender.com")
+        is_allowed = origin in cors_origins
+        
+        if is_render_domain or is_allowed:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Expose-Headers"] = "*"
+
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-Id") or str(uuid4())
     request.state.request_id = request_id
+    origin = request.headers.get("origin")
     
     try:
         response = await call_next(request)
     except Exception as exc:
+        # Create error response with CORS headers
+        error_response = JSONResponse(
+            content={"detail": str(exc)},
+            status_code=500
+        )
+        add_cors_headers(error_response, origin)
+        error_response.headers["X-Request-Id"] = request_id
+        
         emit_audit_log(
             action="request.error",
             status="error",
@@ -492,20 +514,10 @@ async def request_context_middleware(request: Request, call_next):
             ip_address=request.client.host if request.client else None,
             details={"error": str(exc)},
         )
-        raise
+        return error_response
     
-    # Add CORS headers to response if CORS middleware didn't add them (fallback)
-    origin = request.headers.get("origin")
-    if origin:
-        # Check if it's a Render domain or in allowed origins
-        is_render_domain = origin.endswith(".onrender.com")
-        is_allowed = origin in cors_origins
-        
-        if (is_render_domain or is_allowed) and "Access-Control-Allow-Origin" not in response.headers:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
-            response.headers["Access-Control-Allow-Headers"] = "*"
+    # Always add CORS headers (even if middleware already added them, ensure they're correct)
+    add_cors_headers(response, origin)
     
     response.headers["X-Request-Id"] = request_id
     emit_audit_log(
@@ -629,23 +641,29 @@ async def health_check():
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    origin = request.headers.get("origin")
     payload = build_error_response(
         code=f"http_{exc.status_code}",
         message=str(exc.detail) if exc.detail else "Request failed.",
         request_id=getattr(request.state, "request_id", None),
     )
-    return JSONResponse(status_code=exc.status_code, content=payload)
+    response = JSONResponse(status_code=exc.status_code, content=payload)
+    add_cors_headers(response, origin)
+    return response
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    origin = request.headers.get("origin")
     payload = build_error_response(
         code="validation_error",
         message="Validation failed.",
         request_id=getattr(request.state, "request_id", None),
         details=exc.errors(),
     )
-    return JSONResponse(status_code=422, content=payload)
+    response = JSONResponse(status_code=422, content=payload)
+    add_cors_headers(response, origin)
+    return response
 
 
 @app.exception_handler(Exception)
