@@ -442,6 +442,7 @@ app = FastAPI(
 # CORS Configuration
 # Allow all Render subdomains dynamically
 import os
+import re
 
 cors_origins = settings.CORS_ORIGINS.copy() if settings.CORS_ORIGINS else []
 # Add Render frontend URL explicitly
@@ -453,14 +454,23 @@ cors_origins = [x for x in cors_origins if not (x in seen or seen.add(x))]
 
 # Log CORS origins for debugging
 print(f"[INFO] CORS Origins configured: {cors_origins}")
+print(f"[INFO] CORS Regex pattern: https://.*\\.onrender\\.com")
 
+# Test regex pattern
+test_origin = "https://cybercrime-frontend.onrender.com"
+regex_pattern = r"https://.*\.onrender\.com"
+matches = bool(re.match(regex_pattern, test_origin))
+print(f"[INFO] Regex test for {test_origin}: {matches}")
+
+# CORS middleware must be added BEFORE other middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_origin_regex=r"https://.*\.onrender\.com",  # Allow all Render subdomains
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -468,6 +478,19 @@ app.add_middleware(
 async def request_context_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-Id") or str(uuid4())
     request.state.request_id = request_id
+    
+    # Handle CORS preflight requests explicitly
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        if origin and (origin.endswith(".onrender.com") or origin in cors_origins):
+            response = JSONResponse(content={}, status_code=200)
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Max-Age"] = "3600"
+            return response
+    
     try:
         response = await call_next(request)
     except Exception as exc:
@@ -482,6 +505,14 @@ async def request_context_middleware(request: Request, call_next):
             details={"error": str(exc)},
         )
         raise
+    
+    # Add CORS headers to response if not already present
+    origin = request.headers.get("origin")
+    if origin and (origin.endswith(".onrender.com") or origin in cors_origins):
+        if "Access-Control-Allow-Origin" not in response.headers:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    
     response.headers["X-Request-Id"] = request_id
     emit_audit_log(
         action="request.completed",
