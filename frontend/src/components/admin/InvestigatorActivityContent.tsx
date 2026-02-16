@@ -183,7 +183,9 @@ export function InvestigatorActivityContent() {
   const fetchAllInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/activity/all"), { headers: getAuthHeaders() });
+      const authHeaders = getAuthHeaders();
+      console.log("🔑 Fetching investigators - Auth headers:", { hasAuth: !!authHeaders["Authorization"] });
+      const response = await fetch(apiUrl("investigators/activity/all"), { headers: authHeaders });
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -192,7 +194,11 @@ export function InvestigatorActivityContent() {
           setSelectedInvestigator(data.investigators[0].id);
         }
       } else {
-        console.error("Failed to fetch investigators");
+        const errorText = await response.text();
+        console.error("Failed to fetch investigators:", response.status, errorText);
+        if (response.status === 401) {
+          console.error("❌ Authentication failed - token may be missing or expired");
+        }
       }
     } catch (error) {
       console.error("Error fetching investigators:", error);

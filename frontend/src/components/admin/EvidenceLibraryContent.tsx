@@ -47,7 +47,9 @@ export function EvidenceLibraryContent() {
   const fetchEvidence = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("evidence/"), { headers: getAuthHeaders() });
+      const authHeaders = getAuthHeaders();
+      console.log("🔑 Fetching evidence - Auth headers:", { hasAuth: !!authHeaders["Authorization"] });
+      const response = await fetch(apiUrl("evidence/"), { headers: authHeaders });
       if (response.ok) {
         const data = await response.json();
         console.log("Fetched evidence data:", data);
@@ -104,7 +106,12 @@ export function EvidenceLibraryContent() {
       } else {
         const errorText = await response.text();
         console.error("Failed to fetch evidence:", response.status, errorText);
-        alert(`Failed to fetch evidence files: ${response.status} ${errorText}`);
+        if (response.status === 401) {
+          console.error("❌ Authentication failed - token may be missing or expired");
+          alert("Authentication required. Please log in again.");
+        } else {
+          alert(`Failed to fetch evidence files: ${response.status} ${errorText}`);
+        }
       }
     } catch (error) {
       console.error("Error fetching evidence:", error);
