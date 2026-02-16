@@ -14,7 +14,7 @@ import {
   Shield,
   MapPin
 } from "lucide-react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 
 interface Investigator {
   id: number;
@@ -42,7 +42,7 @@ export function InvestigatorsManagementContent() {
   const fetchInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/investigators"));
+      const response = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         // Filter out superadmin account (extra safety check)
@@ -77,6 +77,7 @@ export function InvestigatorsManagementContent() {
     try {
       const response = await fetch(apiUrl(`investigators/investigators/${id}`), {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
 
       const data = await response.json();

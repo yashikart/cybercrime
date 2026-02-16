@@ -98,8 +98,14 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
 
     const fetchUnreadCount = async () => {
       try {
+        const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
         const response = await fetch(
-          apiUrl(`messages/investigators/${investigatorId}/unread-count`)
+          apiUrl(`messages/investigators/${investigatorId}/unread-count`),
+          { headers }
         );
         if (response.ok) {
           const data = await response.json();
@@ -332,7 +338,12 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
               onMarkAsRead={() => {
                 // Refresh unread count when message is marked as read
                 if (investigatorId) {
-                  fetch(apiUrl(`messages/investigators/${investigatorId}/unread-count`))
+                  const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+                  const headers: HeadersInit = {};
+                  if (token) {
+                    headers["Authorization"] = `Bearer ${token}`;
+                  }
+                  fetch(apiUrl(`messages/investigators/${investigatorId}/unread-count`), { headers })
                     .then(res => res.json())
                     .then(data => setUnreadCount(data.unread_count || 0))
                     .catch(console.error);
@@ -938,7 +949,12 @@ function EvidenceLibrarySection({ walletFilter }: { walletFilter: string }) {
   const fetchEvidence = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("evidence/"));
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch(apiUrl("evidence/"), { headers });
       if (res.ok) {
         const data = await res.json();
         setEvidence(data);
@@ -1261,7 +1277,12 @@ function WatchlistSection() {
   const fetchWatchlist = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("watchlist"));
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch(apiUrl("watchlist"), { headers });
       if (res.ok) {
         const data = await res.json();
         setWatchlist(data);
@@ -1281,12 +1302,17 @@ function WatchlistSection() {
     e.preventDefault();
     if (!walletAddress.trim()) return;
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const params = new URLSearchParams();
       params.append("wallet_address", walletAddress.trim());
       if (label.trim()) params.append("label", label.trim());
       const res = await fetch(
         apiUrl(`watchlist?${params.toString()}`),
-        { method: "POST" }
+        { method: "POST", headers }
       );
       if (res.ok) {
         setWalletAddress("");
@@ -1300,9 +1326,14 @@ function WatchlistSection() {
 
   const handleRemove = async (id: number) => {
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const res = await fetch(
         apiUrl(`watchlist/${id}`),
-        { method: "DELETE" }
+        { method: "DELETE", headers }
       );
       if (res.ok) {
         setWatchlist((prev) => prev.filter((w) => w.id !== id));
@@ -1315,9 +1346,14 @@ function WatchlistSection() {
   const handleAnalyzeOne = async (id: number) => {
     try {
       setAnalyzingId(id);
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const res = await fetch(
         apiUrl(`watchlist/${id}/analyze`),
-        { method: "POST" }
+        { method: "POST", headers }
       );
       if (res.ok) {
         const updated = await res.json();
@@ -1335,9 +1371,14 @@ function WatchlistSection() {
   const handleBatchAnalyze = async () => {
     try {
       setBatchLoading(true);
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const res = await fetch(
         apiUrl("watchlist/batch-analyze"),
-        { method: "POST" }
+        { method: "POST", headers }
       );
       if (res.ok) {
         const data = await res.json();
@@ -2052,7 +2093,12 @@ function ContactPoliceSection({
   const fetchWalletEvidence = async (walletAddress: string) => {
     setEvidenceLoading(true);
     try {
-      const res = await fetch(apiUrl("evidence/"));
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch(apiUrl("evidence/"), { headers });
       if (res.ok) {
         const data = await res.json();
         const filtered = (data as any[]).filter((item) => {
@@ -2551,11 +2597,16 @@ function ContactPoliceSection({
                   }
 
                   const evidenceIds = walletEvidence.map((e) => e.id);
+                  const complaintToken = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+                  const complaintHeaders: HeadersInit = {
+                    "Content-Type": "application/json",
+                  };
+                  if (complaintToken) {
+                    complaintHeaders["Authorization"] = `Bearer ${complaintToken}`;
+                  }
                   const response = await fetch(apiUrl("complaints/"), {
                     method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
+                    headers: complaintHeaders,
                     body: JSON.stringify({
                       wallet_address: walletId,
                       officer_designation: selectedStation["Officer/Designation"],
@@ -2618,7 +2669,12 @@ function ComplaintHistorySection() {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("complaints/"));
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const response = await fetch(apiUrl("complaints/"), { headers });
       if (response.ok) {
         const data = await response.json();
         setComplaints(data);
@@ -3100,11 +3156,16 @@ function ResetPasswordSection() {
 
     setLoading(true);
     try {
+      const resetToken = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const resetHeaders: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (resetToken) {
+        resetHeaders["Authorization"] = `Bearer ${resetToken}`;
+      }
       const response = await fetch(apiUrl("investigators/reset-password"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: resetHeaders,
         body: JSON.stringify({
           email: investigatorEmail.trim(),
           old_password: oldPassword,

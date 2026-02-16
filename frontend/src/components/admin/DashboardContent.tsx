@@ -122,15 +122,21 @@ export function DashboardContent() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
+      const adminToken = localStorage.getItem("admin_token") || localStorage.getItem("access_token");
+      const authHeaders: HeadersInit = {};
+      if (adminToken) {
+        authHeaders["Authorization"] = `Bearer ${adminToken}`;
+      }
+
       // Fetch complaints with locations
-      const complaintsRes = await fetch(apiUrl("complaints/"));
+      const complaintsRes = await fetch(apiUrl("complaints/"), { headers: authHeaders });
       let complaints: any[] = [];
       if (complaintsRes.ok) {
         complaints = await complaintsRes.json();
       }
 
       // Fetch investigators
-      const investigatorsRes = await fetch(apiUrl("investigators/investigators"));
+      const investigatorsRes = await fetch(apiUrl("investigators/investigators"), { headers: authHeaders });
       let investigators: any[] = [];
       if (investigatorsRes.ok) {
         const invData = await investigatorsRes.json();
@@ -138,14 +144,14 @@ export function DashboardContent() {
       }
 
       // Fetch evidence
-      const evidenceRes = await fetch(apiUrl("evidence/"));
+      const evidenceRes = await fetch(apiUrl("evidence/"), { headers: authHeaders });
       let evidence: any[] = [];
       if (evidenceRes.ok) {
         evidence = await evidenceRes.json();
       }
 
       // Fetch wallets
-      const walletsRes = await fetch(apiUrl("wallets/"));
+      const walletsRes = await fetch(apiUrl("wallets/"), { headers: authHeaders });
       let wallets: any[] = [];
       if (walletsRes.ok) {
         wallets = await walletsRes.json();
@@ -153,7 +159,7 @@ export function DashboardContent() {
 
       // Dashboard-level activity feed
       try {
-        const activityRes = await fetch(apiUrl("dashboard/activity-feed?limit=50"));
+        const activityRes = await fetch(apiUrl("dashboard/activity-feed?limit=50"), { headers: authHeaders });
         if (activityRes.ok) {
           const activityData = await activityRes.json();
           setActivityEvents(activityData.events || []);
@@ -164,13 +170,8 @@ export function DashboardContent() {
 
       // Dashboard-level notifications
       try {
-        const adminToken = localStorage.getItem("admin_token");
-        const headers: HeadersInit = {};
-        if (adminToken) {
-          headers["Authorization"] = `Bearer ${adminToken}`;
-        }
         const notifRes = await fetch(apiUrl("dashboard/notifications?limit=50"), {
-          headers
+          headers: authHeaders
         });
         if (notifRes.ok) {
           const notifData = await notifRes.json();
@@ -197,7 +198,7 @@ export function DashboardContent() {
 
       // Dashboard risk trends
       try {
-        const trendsRes = await fetch(apiUrl("dashboard/risk-trends?days=30"));
+        const trendsRes = await fetch(apiUrl("dashboard/risk-trends?days=30"), { headers: authHeaders });
         if (trendsRes.ok) {
           const trendsData = await trendsRes.json();
           setRiskTrends(trendsData);
@@ -245,14 +246,8 @@ export function DashboardContent() {
       setFreezeUnfreezeNotifications(notifications.slice(0, 10));
 
       // Fetch incident reports for active investigations (superadmin sees all)
-      const token = localStorage.getItem("access_token");
-      const headers: HeadersInit = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-      
       const reportsRes = await fetch(apiUrl("incidents/reports?limit=10"), {
-        headers: headers,
+        headers: authHeaders,
       });
       let reports: any[] = [];
       if (reportsRes.ok) {
@@ -311,7 +306,7 @@ export function DashboardContent() {
       setRecentAIAnalysis(aiAnalysisNotifications);
       // Smart / AI-prioritized queue from dashboard endpoint
       try {
-        const pqRes = await fetch(apiUrl("dashboard/priority-queue?limit=20"));
+        const pqRes = await fetch(apiUrl("dashboard/priority-queue?limit=20"), { headers: authHeaders });
         if (pqRes.ok) {
           const pqData = await pqRes.json();
           // Transform backend data to match frontend expectations
@@ -393,7 +388,7 @@ export function DashboardContent() {
       // Fetch fraud detection stats
       let fraudStats = { total: 0, fraud: 0, normal: 0, fraud_percentage: 0 };
       try {
-        const fraudStatsRes = await fetch(apiUrl("fraud-transactions/stats"));
+        const fraudStatsRes = await fetch(apiUrl("fraud-transactions/stats"), { headers: authHeaders });
         if (fraudStatsRes.ok) {
           fraudStats = await fraudStatsRes.json();
         }
@@ -404,7 +399,7 @@ export function DashboardContent() {
       // Fetch model status for accuracy
       let modelAccuracy = 0;
       try {
-        const modelStatusRes = await fetch(apiUrl("fraud-predictions/model/status"));
+        const modelStatusRes = await fetch(apiUrl("fraud-predictions/model/status"), { headers: authHeaders });
         if (modelStatusRes.ok) {
           const modelStatus = await modelStatusRes.json();
           if (modelStatus.available && modelStatus.metadata?.metrics?.accuracy) {

@@ -5,7 +5,7 @@ import { Textarea } from "../ui/textarea";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface WalletData {
   wallet: {
     id: number;
@@ -77,7 +77,7 @@ export function EscalationsContent() {
   const fetchFrozenWallets = async () => {
     setLoadingFrozen(true);
     try {
-      const response = await fetch(apiUrl("wallets/frozen/list"));
+      const response = await fetch(apiUrl("wallets/frozen/list"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setFrozenWallets(data);
@@ -92,7 +92,7 @@ export function EscalationsContent() {
   const fetchUnfrozenWallets = async () => {
     setLoadingUnfrozen(true);
     try {
-      const response = await fetch(apiUrl("wallets/unfrozen/list"));
+      const response = await fetch(apiUrl("wallets/unfrozen/list"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setUnfrozenWallets(data);
@@ -109,7 +109,7 @@ export function EscalationsContent() {
     
     setLoading(true);
     try {
-      const response = await fetch(apiUrl(`wallets/search/${encodeURIComponent(searchWallet.trim())}`));
+      const response = await fetch(apiUrl(`wallets/search/${encodeURIComponent(searchWallet.trim())}`), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setWalletResult(data);
@@ -133,9 +133,7 @@ export function EscalationsContent() {
     try {
       const response = await fetch(apiUrl(`wallets/${freezingWalletId}/freeze`), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           freeze_reason: freezeReason.trim(),
           frozen_by: adminEmail,
@@ -173,9 +171,7 @@ export function EscalationsContent() {
     try {
       const response = await fetch(apiUrl(`wallets/${walletId}/unfreeze`), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           unfreeze_reason: unfreezeReason.trim(),
           unfrozen_by: adminEmail,

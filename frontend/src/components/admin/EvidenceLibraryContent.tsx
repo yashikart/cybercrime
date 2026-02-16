@@ -3,7 +3,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useState, useEffect } from "react";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface EvidenceFile {
   id: number;
   evidence_id: string;
@@ -47,7 +47,7 @@ export function EvidenceLibraryContent() {
   const fetchEvidence = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("evidence/"));
+      const response = await fetch(apiUrl("evidence/"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         console.log("Fetched evidence data:", data);
@@ -62,7 +62,7 @@ export function EvidenceLibraryContent() {
         // Fetch all investigators to map IDs to names
         let investigatorsMap = new Map<number, { name: string; email: string }>();
         try {
-          const investigatorsResponse = await fetch(apiUrl("investigators/"));
+          const investigatorsResponse = await fetch(apiUrl("investigators/"), { headers: getAuthHeaders() });
           if (investigatorsResponse.ok) {
             const investigatorsData = await investigatorsResponse.json();
             investigatorsData.forEach((inv: any) => {
@@ -405,7 +405,7 @@ export function EvidenceLibraryContent() {
                                       e.stopPropagation();
                                       // View evidence file
                                       try {
-                                        const response = await fetch(apiUrl(`evidence/${file.id}/view`));
+                                        const response = await fetch(apiUrl(`evidence/${file.id}/view`), { headers: getAuthHeaders() });
                                         if (response.ok) {
                                           const blob = await response.blob();
                                           const url = window.URL.createObjectURL(blob);
@@ -430,7 +430,7 @@ export function EvidenceLibraryContent() {
                                       e.stopPropagation();
                                       // Download evidence file
                                       try {
-                                        const response = await fetch(apiUrl(`evidence/${file.id}/download`));
+                                        const response = await fetch(apiUrl(`evidence/${file.id}/download`), { headers: getAuthHeaders() });
                                         if (response.ok) {
                                           const blob = await response.blob();
                                           const url = window.URL.createObjectURL(blob);

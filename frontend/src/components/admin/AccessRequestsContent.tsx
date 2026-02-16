@@ -3,7 +3,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { CheckCircle, XCircle, Clock, Search, UserPlus, Mail, FileText, Calendar } from "lucide-react";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface AccessRequest {
   id: number;
   full_name: string;
@@ -39,7 +39,7 @@ export function AccessRequestsContent() {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch(apiUrl("access-requests/requests"));
+      const response = await fetch(apiUrl("access-requests/requests"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setRequests(data);

@@ -3,7 +3,7 @@ import { Brain, Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle,
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 // ML Model Interfaces
 interface FraudTransaction {
   id: number;
@@ -119,7 +119,7 @@ export function AIFraudDetectionContent() {
 
   const fetchMLModelStatus = async () => {
     try {
-      const response = await fetch(apiUrl("fraud-predictions/model/status"));
+      const response = await fetch(apiUrl("fraud-predictions/model/status"), { headers: getAuthHeaders() });
       const data = await response.json();
       setMlModelStatus(data);
     } catch (error) {
@@ -130,7 +130,7 @@ export function AIFraudDetectionContent() {
   const fetchTransactions = async () => {
     setMlLoading(true);
     try {
-      const response = await fetch(apiUrl("fraud-transactions/?limit=100"));
+      const response = await fetch(apiUrl("fraud-transactions/?limit=100"), { headers: getAuthHeaders() });
       const data = await response.json();
       setTransactions(data);
     } catch (error) {
@@ -142,7 +142,7 @@ export function AIFraudDetectionContent() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(apiUrl("fraud-transactions/stats"));
+      const response = await fetch(apiUrl("fraud-transactions/stats"), { headers: getAuthHeaders() });
       const data = await response.json();
       setStats(data);
     } catch (error) {
@@ -152,7 +152,7 @@ export function AIFraudDetectionContent() {
 
   const fetchRLStats = async () => {
     try {
-      const response = await fetch(apiUrl("rl-engine/status"));
+      const response = await fetch(apiUrl("rl-engine/status"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setRlStats(data);
@@ -164,7 +164,7 @@ export function AIFraudDetectionContent() {
 
   const fetchRLPerformance = async () => {
     try {
-      const response = await fetch(apiUrl("rl-engine/performance"));
+      const response = await fetch(apiUrl("rl-engine/performance"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setRlPerformance(data);
@@ -176,7 +176,7 @@ export function AIFraudDetectionContent() {
 
   const predictML = async (transactionId: number) => {
     try {
-      const response = await fetch(apiUrl(`fraud-predictions/predict/${transactionId}`));
+      const response = await fetch(apiUrl(`fraud-predictions/predict/${transactionId}`), { headers: getAuthHeaders() });
       const data = await response.json();
       setMlPredictions(prev => new Map(prev).set(transactionId, data));
     } catch (error) {
@@ -187,7 +187,7 @@ export function AIFraudDetectionContent() {
 
   const predictRL = async (transactionId: number) => {
     try {
-      const response = await fetch(apiUrl(`rl-engine/predict/${transactionId}`));
+      const response = await fetch(apiUrl(`rl-engine/predict/${transactionId}`), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         // Store RL prediction (we'll use a different map or combine)
@@ -203,7 +203,7 @@ export function AIFraudDetectionContent() {
     try {
       const response = await fetch(apiUrl("rl-engine/train"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           limit: trainLimit,
           epochs: trainEpochs,

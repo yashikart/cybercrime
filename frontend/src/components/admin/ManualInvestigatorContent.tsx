@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { InvestigatorMap } from "./InvestigatorMap";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface DatabaseStatus {
   connected: boolean;
   database_type: string;
@@ -67,7 +67,7 @@ export function ManualInvestigatorContent() {
   const checkDatabaseStatus = async () => {
     setDbLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/database/status"));
+      const response = await fetch(apiUrl("investigators/database/status"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setDbStatus(data);
@@ -147,9 +147,7 @@ export function ManualInvestigatorContent() {
     try {
       const response = await fetch(apiUrl("investigators/send-welcome-email"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
           name: name.trim() || undefined,
@@ -209,9 +207,7 @@ export function ManualInvestigatorContent() {
     try {
       const response = await fetch(apiUrl("investigators/init-superadmin"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
       });
 
       const data = await response.json();
@@ -240,7 +236,7 @@ export function ManualInvestigatorContent() {
   const fetchInvestigators = async () => {
     setInvestigatorsLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/investigators"));
+      const response = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -262,6 +258,7 @@ export function ManualInvestigatorContent() {
     try {
       const response = await fetch(apiUrl("investigators/delete-all-investigators"), {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
 
       const data = await response.json();

@@ -18,7 +18,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -79,7 +79,7 @@ export function InvestigatorCommunicationContent() {
   const fetchInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/investigators"));
+      const response = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);

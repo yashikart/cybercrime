@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -183,7 +183,7 @@ export function InvestigatorActivityContent() {
   const fetchAllInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/activity/all"));
+      const response = await fetch(apiUrl("investigators/activity/all"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -204,7 +204,7 @@ export function InvestigatorActivityContent() {
   const fetchInvestigatorActivity = async (investigatorId: number) => {
     setLoadingActivity(true);
     try {
-      const response = await fetch(apiUrl(`investigators/${investigatorId}/activity`));
+      const response = await fetch(apiUrl(`investigators/${investigatorId}/activity`), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setActivityData(data);
@@ -253,7 +253,7 @@ export function InvestigatorActivityContent() {
     if (!selectedInvestigator) return;
     
     try {
-      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/activity`));
+      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/activity`), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setInvestigatorDetails(data.investigator);
@@ -269,28 +269,28 @@ export function InvestigatorActivityContent() {
     setLoadingDetails(true);
     try {
       // Fetch evidence
-      const evidenceRes = await fetch(apiUrl(`evidence/?investigator_id=${selectedInvestigator}`));
+      const evidenceRes = await fetch(apiUrl(`evidence/?investigator_id=${selectedInvestigator}`), { headers: getAuthHeaders() });
       if (evidenceRes.ok) {
         const evidenceData = await evidenceRes.json();
         setEvidence(evidenceData || []);
       }
 
       // Fetch complaints
-      const complaintsRes = await fetch(apiUrl(`complaints/?investigator_id=${selectedInvestigator}`));
+      const complaintsRes = await fetch(apiUrl(`complaints/?investigator_id=${selectedInvestigator}`), { headers: getAuthHeaders() });
       if (complaintsRes.ok) {
         const complaintsData = await complaintsRes.json();
         setComplaints(complaintsData || []);
       }
 
       // Fetch incident reports
-      const reportsRes = await fetch(apiUrl(`incidents/reports?investigator_id=${selectedInvestigator}`));
+      const reportsRes = await fetch(apiUrl(`incidents/reports?investigator_id=${selectedInvestigator}`), { headers: getAuthHeaders() });
       if (reportsRes.ok) {
         const reportsData = await reportsRes.json();
         setReports(reportsData || []);
       }
 
       // Fetch watchlist
-      const watchlistRes = await fetch(apiUrl(`watchlist/`));
+      const watchlistRes = await fetch(apiUrl(`watchlist/`), { headers: getAuthHeaders() });
       if (watchlistRes.ok) {
         const watchlistData = await watchlistRes.json();
         const filtered = (watchlistData || []).filter(

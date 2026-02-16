@@ -19,7 +19,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { Button } from "../ui/button";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -103,7 +103,7 @@ export function InvestigatorStatusContent() {
   const fetchInvestigators = async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl("investigators/investigators"));
+      const response = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setInvestigators(data.investigators || []);
@@ -123,7 +123,7 @@ export function InvestigatorStatusContent() {
     
     setLoadingStatus(true);
     try {
-      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/status`));
+      const response = await fetch(apiUrl(`investigators/${selectedInvestigator}/status`), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setStatusData(data);

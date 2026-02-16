@@ -26,3 +26,29 @@ export const apiUrl = (path: string) => {
 
   return fullUrl;
 };
+
+// Helper to get auth headers from localStorage
+export function getAuthHeaders(): HeadersInit {
+  const token =
+    localStorage.getItem("admin_token") ||
+    localStorage.getItem("investigator_token") ||
+    localStorage.getItem("access_token");
+  const headers: HeadersInit = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+// Authenticated fetch wrapper - automatically adds auth headers
+export async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const authHeaders = getAuthHeaders();
+  const mergedHeaders: HeadersInit = {
+    ...authHeaders,
+    ...(init?.headers || {}),
+  };
+  return fetch(apiUrl(path), {
+    ...init,
+    headers: mergedHeaders,
+  });
+}

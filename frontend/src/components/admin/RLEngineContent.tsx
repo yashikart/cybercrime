@@ -3,7 +3,7 @@ import { Cpu, Activity, Zap, TrendingUp, BarChart3, Settings, Play, RefreshCw, L
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface RLStats {
   status: string;
   model_loaded: boolean;
@@ -41,7 +41,7 @@ export function RLEngineContent() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(apiUrl("rl-engine/status"));
+      const response = await fetch(apiUrl("rl-engine/status"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -53,7 +53,7 @@ export function RLEngineContent() {
 
   const fetchPerformance = async () => {
     try {
-      const response = await fetch(apiUrl("rl-engine/performance"));
+      const response = await fetch(apiUrl("rl-engine/performance"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setPerformance(data);
@@ -78,7 +78,7 @@ export function RLEngineContent() {
     try {
       const response = await fetch(apiUrl("rl-engine/train"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           limit: trainLimit,
           epochs: trainEpochs,
@@ -109,6 +109,7 @@ export function RLEngineContent() {
     try {
       const response = await fetch(apiUrl("rl-engine/reset"), {
         method: "POST",
+        headers: getAuthHeaders(),
       });
 
       if (response.ok) {
