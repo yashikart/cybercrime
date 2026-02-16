@@ -82,13 +82,20 @@ export function InvestigatorCommunicationContent() {
       const response = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
-        setInvestigators(data.investigators || []);
-        if (data.investigators && data.investigators.length > 0 && !selectedInvestigator) {
-          setSelectedInvestigator(data.investigators[0].id);
+        const investigatorsList = data.investigators || [];
+        setInvestigators(investigatorsList);
+        if (investigatorsList.length > 0 && !selectedInvestigator) {
+          setSelectedInvestigator(investigatorsList[0].id);
+        } else if (investigatorsList.length === 0) {
+          setErrorMessage("No investigators found. Please create an investigator first.");
         }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        setErrorMessage(`Failed to load investigators: ${errorData.detail || response.statusText}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching investigators:", error);
+      setErrorMessage(`Error loading investigators: ${error.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -111,13 +118,12 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
+      const headers = { ...getAuthHeaders(), "Content-Type": "application/json" };
       const response = await fetch(
         apiUrl(`messages/investigators/${selectedInvestigator}/message`),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify({
             message_type: messageType,
             subject: messageSubject,
@@ -134,11 +140,17 @@ export function InvestigatorCommunicationContent() {
         setMessageContent("");
         setMessagePriority("normal");
       } else {
-        const data = await response.json();
-        setErrorMessage(data.detail || "Failed to send message");
+        let errorDetail = "Failed to send message";
+        try {
+          const data = await response.json();
+          errorDetail = data.detail || data.message || errorDetail;
+        } catch {
+          errorDetail = `Failed to send message (Status: ${response.status})`;
+        }
+        setErrorMessage(errorDetail);
       }
     } catch (error: any) {
-      setErrorMessage("Error sending message: " + error.message);
+      setErrorMessage("Error sending message: " + (error.message || "Network error"));
     } finally {
       setSending(false);
     }
@@ -157,13 +169,12 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
+      const headers = { ...getAuthHeaders(), "Content-Type": "application/json" };
       const response = await fetch(
         apiUrl(`messages/broadcast`),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify({
             message_type: "announcement",
             subject: announcementSubject,
@@ -181,11 +192,17 @@ export function InvestigatorCommunicationContent() {
         setAnnouncementContent("");
         setAnnouncementPriority("normal");
       } else {
-        const data = await response.json();
-        setErrorMessage(data.detail || "Failed to broadcast announcement");
+        let errorDetail = "Failed to broadcast announcement";
+        try {
+          const data = await response.json();
+          errorDetail = data.detail || data.message || errorDetail;
+        } catch {
+          errorDetail = `Failed to broadcast announcement (Status: ${response.status})`;
+        }
+        setErrorMessage(errorDetail);
       }
     } catch (error: any) {
-      setErrorMessage("Error broadcasting announcement: " + error.message);
+      setErrorMessage("Error broadcasting announcement: " + (error.message || "Network error"));
     } finally {
       setSending(false);
     }
