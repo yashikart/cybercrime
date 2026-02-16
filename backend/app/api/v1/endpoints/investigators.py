@@ -58,7 +58,11 @@ def generate_password(length: int = 12) -> str:
 
 def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_content: str) -> tuple[bool, str]:
     """
-    Send email using Brevo HTTPS API only (no SMTP fallback).
+    Send email using Brevo HTTPS API (NOT SMTP).
+    
+    This uses Brevo's REST API over HTTPS (https://api.brevo.com/v3/smtp/email),
+    which works on Render's free tier since it doesn't require SMTP ports (587/465).
+    No SMTP protocol or ports are used - only standard HTTPS requests.
 
     Returns:
         tuple: (success: bool, error_message: str)
@@ -415,7 +419,6 @@ async def check_email_config():
         "BREVO_API_KEY_LENGTH": len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 0,
         "MAIL_FROM": settings.MAIL_FROM,
         "MAIL_FROM_NAME": settings.MAIL_FROM_NAME,
-        "SMTP_ENABLED": settings.SMTP_ENABLED,
         "FRONTEND_BASE_URL": settings.FRONTEND_BASE_URL,
     }
     return config_status
