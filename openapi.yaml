@@ -4164,3 +4164,14 @@ paths:
               schema: {}
           description: Successful Response
       summary: Health Check
+  /{full_path}:
+    options:
+      description: Handle all OPTIONS requests explicitly
+      operationId: options_handler__full_path__options
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Options Handler
