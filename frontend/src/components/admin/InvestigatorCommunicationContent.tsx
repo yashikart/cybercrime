@@ -49,7 +49,7 @@ interface Message {
   recipient_email: string | null;
 }
 
-type TabType = "send" | "announcements" | "sent";
+type TabType = "send" | "announcements" | "history";
 
 export function InvestigatorCommunicationContent() {
   const [investigators, setInvestigators] = useState<Investigator[]>([]);
@@ -71,10 +71,18 @@ export function InvestigatorCommunicationContent() {
   const [sending, setSending] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [history, setHistory] = useState<Message[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     fetchInvestigators();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchMessageHistory();
+    }
+  }, [activeTab]);
 
   const fetchInvestigators = async () => {
     setLoading(true);
@@ -98,6 +106,25 @@ export function InvestigatorCommunicationContent() {
       setErrorMessage(`Error loading investigators: ${error.message || "Network error"}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMessageHistory = async () => {
+    setHistoryLoading(true);
+    setErrorMessage("");
+    try {
+      const response = await fetch(apiUrl("messages/history?limit=300"), { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setHistory(Array.isArray(data) ? data : []);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        setErrorMessage(`Failed to load history: ${errorData.detail || response.statusText}`);
+      }
+    } catch (error: any) {
+      setErrorMessage(`Error loading history: ${error?.message || "Network error"}`);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -172,6 +199,9 @@ export function InvestigatorCommunicationContent() {
         setMessageSubject("");
         setMessageContent("");
         setMessagePriority("normal");
+        if (activeTab === "history") {
+          fetchMessageHistory();
+        }
       } else {
         let errorDetail = "Failed to send message";
         try {
@@ -256,6 +286,9 @@ export function InvestigatorCommunicationContent() {
         setAnnouncementSubject("");
         setAnnouncementContent("");
         setAnnouncementPriority("normal");
+        if (activeTab === "history") {
+          fetchMessageHistory();
+        }
       } else {
         let errorDetail = "Failed to broadcast announcement";
         try {
@@ -327,6 +360,7 @@ export function InvestigatorCommunicationContent() {
           {[
             { id: "send" as TabType, label: "Send Message", icon: Send },
             { id: "announcements" as TabType, label: "Broadcast Announcement", icon: Bell },
+            { id: "history" as TabType, label: "History", icon: MessageSquare },
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -543,6 +577,76 @@ export function InvestigatorCommunicationContent() {
               )}
             </Button>
           </form>
+        )}
+
+        {/* History Tab */}
+        {activeTab === "history" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 font-mono text-sm">
+                Old sent messages and broadcast announcements
+              </p>
+              <Button
+                type="button"
+                onClick={fetchMessageHistory}
+                disabled={historyLoading}
+                className="bg-gray-800 border border-emerald-500/30 text-emerald-400 hover:bg-gray-700 font-mono"
+              >
+                {historyLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {historyLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+              </div>
+            ) : history.length === 0 ? (
+              <div className="p-6 bg-black/40 border border-emerald-500/20 rounded-lg text-gray-400 font-mono text-sm">
+                No communication history found yet.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                {history.map((msg) => (
+                  <div key={msg.id} className="p-4 bg-black/40 border border-emerald-500/20 rounded-lg">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <h4 className="text-emerald-400 font-mono text-sm">{msg.subject}</h4>
+                        <p className="text-gray-500 font-mono text-xs mt-1">
+                          To: {msg.recipient_email || `Investigator #${msg.recipient_id}`}
+                          {msg.is_broadcast ? " (Broadcast)" : ""}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded border text-xs font-mono ${getPriorityColor(msg.priority)}`}>
+                          {msg.priority.toUpperCase()}
+                        </span>
+                        <p className="text-gray-500 font-mono text-xs mt-2">{formatDate(msg.created_at)}</p>
+                      </div>
+                    </div>
+                    <p className="text-gray-200 font-mono text-sm whitespace-pre-wrap">{msg.content}</p>
+                    <div className="mt-3 flex items-center gap-2 text-xs font-mono">
+                      <span className="px-2 py-1 rounded bg-gray-900/60 border border-gray-700 text-gray-300">
+                        {msg.message_type}
+                      </span>
+                      <span className={`px-2 py-1 rounded border ${msg.is_read ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/20" : "text-yellow-400 border-yellow-500/30 bg-yellow-950/20"}`}>
+                        {msg.is_read ? "Read" : "Unread"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

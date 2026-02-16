@@ -38,6 +38,7 @@ class MessageResponse(BaseModel):
     read_at: Optional[str]
     sender_email: Optional[str] = None
     recipient_email: Optional[str] = None
+    recipient_name: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -180,9 +181,68 @@ async def get_investigator_messages(
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
             "read_at": msg.read_at.isoformat() if msg.read_at else None,
             "sender_email": sender_email,
-            "recipient_email": investigator.email
+            "recipient_email": investigator.email,
+            "recipient_name": investigator.full_name
         })
     
+    return result
+
+
+@router.get("/history", response_model=List[MessageResponse])
+async def get_message_history(
+    investigator_id: Optional[int] = None,
+    message_type: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 200,
+    db: Session = Depends(get_db)
+):
+    """
+    Get communication history sent to investigators.
+    Includes direct messages and broadcast announcements already delivered to investigators.
+    """
+    recipient_query = db.query(User).filter(User.role == "investigator")
+    recipients = recipient_query.all()
+    recipient_by_id = {u.id: u for u in recipients}
+    recipient_ids = list(recipient_by_id.keys())
+
+    if not recipient_ids:
+        return []
+
+    query = db.query(Message).filter(Message.recipient_id.in_(recipient_ids))
+
+    if investigator_id:
+        query = query.filter(Message.recipient_id == investigator_id)
+
+    if message_type:
+        query = query.filter(Message.message_type == message_type)
+
+    messages = query.order_by(Message.created_at.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for msg in messages:
+        recipient = recipient_by_id.get(msg.recipient_id)
+        sender_email = None
+        if msg.sender_id:
+            sender = db.query(User).filter(User.id == msg.sender_id).first()
+            sender_email = sender.email if sender else None
+
+        result.append({
+            "id": msg.id,
+            "sender_id": msg.sender_id,
+            "recipient_id": msg.recipient_id,
+            "message_type": msg.message_type,
+            "subject": msg.subject,
+            "content": msg.content,
+            "is_read": msg.is_read,
+            "is_broadcast": msg.is_broadcast,
+            "priority": msg.priority,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            "read_at": msg.read_at.isoformat() if msg.read_at else None,
+            "sender_email": sender_email,
+            "recipient_email": recipient.email if recipient else None,
+            "recipient_name": recipient.full_name if recipient else None,
+        })
+
     return result
 
 
