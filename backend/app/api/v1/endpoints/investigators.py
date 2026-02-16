@@ -102,12 +102,12 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
             entity_id=to_email,
         )
         
-        # Use Brevo HTTPS API (NOT SMTP) - works on Render free tier
-        # This is a standard HTTPS POST request, not SMTP protocol
-        # No SMTP ports (587/465) are used - only standard HTTPS port 443
+        # IMPORTANT: This is Brevo's HTTPS REST API, NOT SMTP protocol
+        # The URL path contains "smtp" but this is just Brevo's naming - it's actually HTTPS
+        # Uses standard HTTPS port 443 (not SMTP ports 587/465) - works on Render free tier
         with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
             response = client.post(
-                "https://api.brevo.com/v3/smtp/email",  # API endpoint (uses HTTPS, not SMTP ports)
+                "https://api.brevo.com/v3/smtp/email",  # HTTPS REST API endpoint (NOT SMTP protocol)
                 headers=headers,
                 json=payload,
             )
@@ -569,7 +569,7 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
         © 2024 Cybercrime Investigation System. All rights reserved.
         """
         
-        # Send email - only return success if email was actually sent
+        # Send email using Brevo HTTPS API (NOT SMTP) - only return success if email was actually sent
         success, error_message = send_email_via_brevo(request.email, subject, html_content, text_content)
         
         if not success:
@@ -578,13 +578,13 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
             emit_audit_log(
                 action="investigator.create",
                 status="error",
-                message=f"Investigator account creation failed: email sending failed: {error_message}",
+                message=f"Investigator account creation failed: Brevo HTTPS API email sending failed: {error_message}",
                 entity_type="user",
-                details={"email": request.email, "error": error_message}
+                details={"email": request.email, "error": error_message, "method": "Brevo HTTPS API (not SMTP)"}
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to send welcome email: {error_message}"
+                detail=f"Failed to send welcome email via Brevo HTTPS API: {error_message}. Note: We use Brevo's HTTPS REST API (not SMTP protocol)."
             )
         
         # Email sent successfully - return success with reset link
