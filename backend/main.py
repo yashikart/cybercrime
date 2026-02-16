@@ -473,18 +473,22 @@ async def options_handler(request: Request):
 # CORS middleware - will be added at the end so it runs first (FastAPI middleware runs in reverse order)
 
 
-def add_cors_headers(response, origin: str):
+def add_cors_headers(response, origin: str = None):
     """Add CORS headers to response"""
-    if origin:
-        is_render_domain = origin.endswith(".onrender.com")
-        is_allowed = origin in cors_origins
-        
-        if is_render_domain or is_allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            response.headers["Access-Control-Expose-Headers"] = "*"
+    if not origin:
+        return  # No origin header, skip CORS headers
+    
+    # Check if origin is allowed
+    is_render_domain = origin.endswith(".onrender.com")
+    is_allowed = origin in cors_origins
+    
+    # Add CORS headers if origin matches
+    if is_render_domain or is_allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
 
 @app.middleware("http")
 async def cors_early_middleware(request: Request, call_next):
@@ -605,6 +609,7 @@ async def rbac_middleware(request: Request, call_next):
 
     if not policy.is_allowed(role=role, method=request.method, path=request.url.path):
         status_code = 401 if role == "public" else 403
+        origin = request.headers.get("origin")
         emit_audit_log(
             action="rbac.deny",
             status="warning",
@@ -620,11 +625,14 @@ async def rbac_middleware(request: Request, call_next):
             message="Authentication required." if role == "public" else "Access denied.",
             request_id=getattr(request.state, "request_id", None),
         )
-        return JSONResponse(status_code=status_code, content=payload)
+        response = JSONResponse(status_code=status_code, content=payload)
+        add_cors_headers(response, origin)
+        return response
 
     if role == "investigator" and user_id is not None:
         path_id = extract_path_id(request.url.path, "investigators")
         if path_id is not None and path_id != user_id:
+            origin = request.headers.get("origin")
             emit_audit_log(
                 action="rbac.deny",
                 status="warning",
@@ -640,7 +648,9 @@ async def rbac_middleware(request: Request, call_next):
                 message="Access denied.",
                 request_id=getattr(request.state, "request_id", None),
             )
-            return JSONResponse(status_code=403, content=payload)
+            response = JSONResponse(status_code=403, content=payload)
+            add_cors_headers(response, origin)
+            return response
 
     return await call_next(request)
 
