@@ -260,7 +260,7 @@ async def reset_password(request: PasswordResetRequest, db: Session = Depends(ge
     # Verify old password
     if not verify_password(request.old_password, user.hashed_password):
         raise HTTPException(
-            status_code=401,
+            status_code=400,
             detail="Old password is incorrect"
         )
     

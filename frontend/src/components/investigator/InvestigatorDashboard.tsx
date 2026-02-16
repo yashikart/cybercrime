@@ -10,7 +10,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -3202,16 +3202,22 @@ function ResetPasswordSection() {
 
     setLoading(true);
     try {
-      const resetToken = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
-      const resetHeaders: HeadersInit = {
-        "Content-Type": "application/json",
-      };
-      if (resetToken) {
-        resetHeaders["Authorization"] = `Bearer ${resetToken}`;
+      const authHeaders = getAuthHeaders();
+      if (!("Authorization" in authHeaders)) {
+        setResult({
+          success: false,
+          message: "Your session has expired. Please login again and retry password reset.",
+        });
+        setLoading(false);
+        return;
       }
+
       const response = await fetch(apiUrl("investigators/reset-password"), {
         method: "POST",
-        headers: resetHeaders,
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           email: investigatorEmail.trim(),
           old_password: oldPassword,
@@ -3230,9 +3236,15 @@ function ResetPasswordSection() {
         setNewPassword("");
         setConfirmPassword("");
       } else {
+        const detail =
+          typeof data?.detail === "string"
+            ? data.detail
+            : Array.isArray(data?.detail)
+              ? data.detail.map((d: any) => d?.msg || JSON.stringify(d)).join(", ")
+              : undefined;
         setResult({
           success: false,
-          message: data.detail || data.message || "Failed to reset password"
+          message: detail || data.message || "Failed to reset password",
         });
       }
     } catch (error: any) {
