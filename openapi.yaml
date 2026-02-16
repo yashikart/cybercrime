@@ -2720,7 +2720,7 @@ paths:
       - investigators
   /api/v1/investigators/email-config:
     get:
-      description: Check email configuration status
+      description: Check email configuration status (diagnostic endpoint)
       operationId: check_email_config_api_v1_investigators_email_config_get
       responses:
         '200':
