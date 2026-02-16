@@ -126,7 +126,8 @@ class Settings(BaseSettings):
     VALIDATE_CERTS: bool = True
     EMAIL_ENABLED: bool = False
     SMTP_ENABLED: bool = False
-    FRONTEND_BASE_URL: Optional[str] = None
+    # Default to Render frontend URL if not set
+    FRONTEND_BASE_URL: Optional[str] = "https://cybercrime-frontend.onrender.com"
 
     # Brevo HTTP API (recommended for Render and environments that block SMTP)
     # Set BREVO_API_KEY to your "xkeysib-..." key from Brevo. When present,

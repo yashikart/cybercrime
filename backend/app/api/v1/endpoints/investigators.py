@@ -70,10 +70,10 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
         tuple: (success: bool, error_message: str)
     """
     if not settings.EMAIL_ENABLED:
-        return False, "Email delivery is disabled."
+        return False, "Email delivery is disabled. Please set EMAIL_ENABLED=true in your environment variables."
 
     if not settings.MAIL_FROM:
-        return False, "MAIL_FROM is not configured."
+        return False, "MAIL_FROM is not configured. Please set MAIL_FROM in your environment variables."
 
     # First try Brevo HTTPS API if API key is configured
     if settings.BREVO_API_KEY:
@@ -144,8 +144,11 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
             traceback.print_exc()
             # fall through to SMTP fallback
 
+    # If BREVO_API_KEY was not set or failed, and SMTP is disabled, return helpful error
     if not settings.SMTP_ENABLED:
-        return False, "SMTP delivery is disabled."
+        if not settings.BREVO_API_KEY:
+            return False, "BREVO_API_KEY is not configured. Please set BREVO_API_KEY in your environment variables (e.g., in .env file)."
+        return False, "SMTP delivery is disabled and Brevo API failed. Please check your BREVO_API_KEY configuration."
 
     if not settings.MAIL_SERVER or not settings.MAIL_PORT:
         return False, "SMTP server configuration is incomplete."
@@ -612,9 +615,8 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
     
     # Generate password reset token (in production, store this in DB with expiration)
     reset_token = secrets.token_urlsafe(32)
-    base_url = settings.FRONTEND_BASE_URL
-    if not base_url:
-        raise HTTPException(status_code=500, detail="FRONTEND_BASE_URL is not configured.")
+    # Use FRONTEND_BASE_URL from settings, or default to Render frontend URL
+    base_url = settings.FRONTEND_BASE_URL or "https://cybercrime-frontend.onrender.com"
     reset_link = f"{base_url.rstrip('/')}/reset-password?token={reset_token}&email={request.email}"
     
     # Email content
