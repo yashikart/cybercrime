@@ -119,10 +119,17 @@ export function InvestigatorCommunicationContent() {
     
     try {
       const authHeaders = getAuthHeaders();
+      console.log("Auth headers:", authHeaders);
+      console.log("Admin token exists:", !!localStorage.getItem("admin_token"));
+      console.log("Investigator token exists:", !!localStorage.getItem("investigator_token"));
+      console.log("Access token exists:", !!localStorage.getItem("access_token"));
+      
       const headers: HeadersInit = {
         ...authHeaders,
         "Content-Type": "application/json",
       };
+      
+      console.log("Final headers being sent:", headers);
       
       // Debug: Log if token is missing
       if (!authHeaders["Authorization"]) {
@@ -132,20 +139,23 @@ export function InvestigatorCommunicationContent() {
         return;
       }
       
-      const response = await fetch(
-        apiUrl(`messages/investigators/${selectedInvestigator}/message`),
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            message_type: messageType,
-            subject: messageSubject,
-            content: messageContent,
-            priority: messagePriority,
-            is_broadcast: false
-          }),
-        }
-      );
+      const url = apiUrl(`messages/investigators/${selectedInvestigator}/message`);
+      console.log("Sending POST to:", url);
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          message_type: messageType,
+          subject: messageSubject,
+          content: messageContent,
+          priority: messagePriority,
+          is_broadcast: false
+        }),
+      });
+      
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
         setSuccessMessage("Message sent successfully!");
@@ -183,10 +193,14 @@ export function InvestigatorCommunicationContent() {
     
     try {
       const authHeaders = getAuthHeaders();
+      console.log("Broadcast - Auth headers:", authHeaders);
+      
       const headers: HeadersInit = {
         ...authHeaders,
         "Content-Type": "application/json",
       };
+      
+      console.log("Broadcast - Final headers:", headers);
       
       // Debug: Log if token is missing
       if (!authHeaders["Authorization"]) {
@@ -196,20 +210,22 @@ export function InvestigatorCommunicationContent() {
         return;
       }
       
-      const response = await fetch(
-        apiUrl(`messages/broadcast`),
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            message_type: "announcement",
-            subject: announcementSubject,
-            content: announcementContent,
-            priority: announcementPriority,
-            is_broadcast: true
-          }),
-        }
-      );
+      const url = apiUrl(`messages/broadcast`);
+      console.log("Broadcast - Sending POST to:", url);
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          message_type: "announcement",
+          subject: announcementSubject,
+          content: announcementContent,
+          priority: announcementPriority,
+          is_broadcast: true
+        }),
+      });
+      
+      console.log("Broadcast - Response status:", response.status);
       
       if (response.ok) {
         const data = await response.json();
