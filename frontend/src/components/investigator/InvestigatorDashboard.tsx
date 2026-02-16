@@ -1303,24 +1303,35 @@ function WatchlistSection() {
     if (!walletAddress.trim()) return;
     try {
       const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
-      const headers: HeadersInit = {};
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
       }
-      const params = new URLSearchParams();
-      params.append("wallet_address", walletAddress.trim());
-      if (label.trim()) params.append("label", label.trim());
       const res = await fetch(
-        apiUrl(`watchlist?${params.toString()}`),
-        { method: "POST", headers }
+        apiUrl("watchlist"),
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            wallet_address: walletAddress.trim(),
+            label: label.trim() || null,
+          }),
+        }
       );
       if (res.ok) {
         setWalletAddress("");
         setLabel("");
         fetchWatchlist();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Failed to add to watchlist:", res.status, errorData);
+        alert(`Failed to add wallet: ${errorData.detail || "Unknown error"}`);
       }
     } catch (e) {
       console.error("Error adding to watchlist", e);
+      alert("An error occurred while adding the wallet. Please try again.");
     }
   };
 

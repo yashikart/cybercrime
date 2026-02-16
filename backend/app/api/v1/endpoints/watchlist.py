@@ -3,15 +3,21 @@ Watchlist & monitoring endpoints.
 Allow saving wallets for quick analysis and tracking latest risk.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from app.db.database import get_db
 from app.db.models import WatchlistWallet, IncidentReport
 from app.api.v1.endpoints.incidents import analyze_wallet_incident
 from app.api.v1.schemas import IncidentReportRequest
+
+
+class WatchlistAddRequest(BaseModel):
+    wallet_address: str
+    label: Optional[str] = None
 
 
 router = APIRouter()
@@ -43,12 +49,12 @@ def get_watchlist(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=dict)
 def add_to_watchlist(
-    wallet_address: str,
-    label: str | None = None,
+    request: WatchlistAddRequest,
     db: Session = Depends(get_db),
 ):
     """Add a wallet to the watchlist."""
-    wallet_address = wallet_address.strip()
+    wallet_address = request.wallet_address.strip()
+    label = request.label
     if not wallet_address:
         raise HTTPException(status_code=400, detail="wallet_address is required")
 
