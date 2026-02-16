@@ -16,6 +16,7 @@ import {
   UserCog,
   Trash2,
   Users,
+  AlertTriangle,
   MapPin
 } from "lucide-react";
 import { InvestigatorMap } from "./InvestigatorMap";
