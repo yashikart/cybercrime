@@ -10,7 +10,7 @@ import { TextToSpeechIconButton } from "../ui/TextToSpeechButton";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAuthHeaders } from "@/lib/api";
 interface IncidentReportData {
   wallet: string;
   risk_score: number;
@@ -372,12 +372,18 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
             if (!newNote.trim() || !reportData.report_id) return;
             try {
               setIsSavingNote(true);
+              const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+              const headers: HeadersInit = {};
+              if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+              }
               const res = await fetch(
                 apiUrl(`incidents/reports/${reportData.report_id}/notes?note=${encodeURIComponent(
                   newNote.trim()
                 )}`),
                 {
                   method: "POST",
+                  headers,
                 }
               );
               if (res.ok) {
@@ -385,12 +391,22 @@ export function IncidentReportDisplay({ reportData }: IncidentReportDisplayProps
                 if (data.note) {
                   setNotes((prev) => [...prev, data.note]);
                   setNewNote("");
+                } else {
+                  console.error("Failed to add note: Invalid response", data);
+                  alert("Failed to add note. Please try again.");
                 }
               } else {
-                console.error("Failed to add note");
+                const errorData = await res.json().catch(() => ({}));
+                console.error("Failed to add note:", res.status, errorData);
+                if (res.status === 401) {
+                  alert("Authentication required. Please log in again.");
+                } else {
+                  alert(`Failed to add note: ${errorData.detail || "Unknown error"}`);
+                }
               }
             } catch (err) {
               console.error("Error adding note", err);
+              alert("An error occurred while adding the note. Please try again.");
             } finally {
               setIsSavingNote(false);
             }
