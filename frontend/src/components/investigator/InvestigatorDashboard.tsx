@@ -2625,8 +2625,8 @@ function ContactPoliceSection({
                       const ipData = await ipRes.json();
                       locationData.ip = ipData.ip;
 
-                      // Get location from IP
-                      const locationRes = await fetch(`http://ip-api.com/json/${locationData.ip}`);
+                      // Get location from IP (using HTTPS to avoid mixed content errors)
+                      const locationRes = await fetch(`https://ip-api.com/json/${locationData.ip}`);
                       if (locationRes.ok) {
                         const locData = await locationRes.json();
                         if (locData.status === "success") {
