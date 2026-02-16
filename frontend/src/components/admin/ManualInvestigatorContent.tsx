@@ -9,7 +9,6 @@ import {
   CheckCircle, 
   XCircle, 
   Loader2,
-  Key,
   Link as LinkIcon,
   Copy,
   Check,
@@ -17,7 +16,6 @@ import {
   UserCog,
   Trash2,
   Users,
-  AlertTriangle,
   MapPin
 } from "lucide-react";
 import { InvestigatorMap } from "./InvestigatorMap";
@@ -32,19 +30,8 @@ interface DatabaseStatus {
 interface EmailResponse {
   success: boolean;
   message: string;
-  warning?: string;
-  email_error?: string;
-  email_config?: {
-    EMAIL_ENABLED?: boolean;
-    BREVO_API_KEY_PRESENT?: boolean;
-    BREVO_API_KEY_LENGTH?: number;
-    MAIL_FROM?: string;
-    MAIL_FROM_NAME?: string;
-    SMTP_ENABLED?: boolean;
-  };
   user_id?: number;
   email?: string;
-  password?: string;
   reset_link?: string;
 }
 
@@ -577,81 +564,27 @@ export function ManualInvestigatorContent() {
                   {emailResult.message}
                 </p>
 
-                {/* Show warning if email failed but account was created */}
-                {emailResult.success && emailResult.warning && (
-                  <div className="mt-3 p-3 bg-yellow-950/20 border border-yellow-500/30 rounded">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-yellow-400 font-mono text-xs font-semibold mb-1">Email Warning:</p>
-                        <p className="text-yellow-300 font-mono text-xs">{emailResult.warning}</p>
-                        {emailResult.email_error && (
-                          <p className="text-yellow-200 font-mono text-xs mt-2 opacity-80">
-                            Error: {emailResult.email_error}
-                          </p>
-                        )}
-                        {emailResult.email_config && (
-                          <div className="mt-3 p-2 bg-black/40 rounded border border-yellow-500/20">
-                            <p className="text-yellow-400 font-mono text-xs font-semibold mb-1">Email Configuration:</p>
-                            <ul className="text-yellow-200 font-mono text-xs space-y-1">
-                              <li>• EMAIL_ENABLED: {emailResult.email_config.EMAIL_ENABLED ? "✓ true" : "✗ false"}</li>
-                              <li>• BREVO_API_KEY: {emailResult.email_config.BREVO_API_KEY_PRESENT ? `✓ present (${emailResult.email_config.BREVO_API_KEY_LENGTH} chars)` : "✗ missing"}</li>
-                              <li>• MAIL_FROM: {emailResult.email_config.MAIL_FROM || "✗ not set"}</li>
-                              <li>• SMTP_ENABLED: {emailResult.email_config.SMTP_ENABLED ? "✓ true" : "✗ false"}</li>
-                            </ul>
-                            <p className="text-yellow-300 font-mono text-xs mt-2 pt-2 border-t border-yellow-500/20">
-                              💡 To fix: Set EMAIL_ENABLED=true, BREVO_API_KEY (your xkeysib-... key), and MAIL_FROM (verified email) in Render environment variables.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {emailResult.success && emailResult.password && (
-                  <div className="space-y-3 mt-4">
-                    <div className="bg-black/40 p-3 rounded border border-emerald-500/30">
+                {emailResult.success && emailResult.reset_link && (
+                  <div className="mt-4">
+                    <div className="bg-black/40 p-3 rounded border border-cyan-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-gray-400 font-mono text-xs flex items-center gap-2">
-                          <Key className="w-3 h-3" />
-                          Generated Password:
+                          <LinkIcon className="w-3 h-3" />
+                          Password Reset Link:
                         </span>
                         <button
-                          onClick={() => copyToClipboard(emailResult.password!)}
-                          className="p-1 hover:bg-emerald-500/20 rounded transition"
+                          onClick={() => copyToClipboard(emailResult.reset_link!)}
+                          className="p-1 hover:bg-cyan-500/20 rounded transition"
                         >
                           {copied ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
+                            <Check className="w-3 h-3 text-cyan-400" />
                           ) : (
                             <Copy className="w-3 h-3 text-gray-400" />
                           )}
                         </button>
                       </div>
-                      <p className="text-emerald-400 font-mono text-sm break-all">{emailResult.password}</p>
+                      <p className="text-cyan-400 font-mono text-xs break-all">{emailResult.reset_link}</p>
                     </div>
-
-                    {emailResult.reset_link && (
-                      <div className="bg-black/40 p-3 rounded border border-cyan-500/30">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-400 font-mono text-xs flex items-center gap-2">
-                            <LinkIcon className="w-3 h-3" />
-                            Password Reset Link:
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(emailResult.reset_link!)}
-                            className="p-1 hover:bg-cyan-500/20 rounded transition"
-                          >
-                            {copied ? (
-                              <Check className="w-3 h-3 text-cyan-400" />
-                            ) : (
-                              <Copy className="w-3 h-3 text-gray-400" />
-                            )}
-                          </button>
-                        </div>
-                        <p className="text-cyan-400 font-mono text-xs break-all">{emailResult.reset_link}</p>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>

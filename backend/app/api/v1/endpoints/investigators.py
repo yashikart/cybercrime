@@ -4,9 +4,6 @@ Admin endpoints for managing investigators
 
 import secrets
 import string
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 
 import httpx
@@ -61,228 +58,80 @@ def generate_password(length: int = 12) -> str:
 
 def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_content: str) -> tuple[bool, str]:
     """
-    Send email using Brevo.
-
-    Preferred: HTTPS API with BREVO_API_KEY (works on Render where SMTP is blocked).
-    Fallback: SMTP using MAIL_* settings (for local/dev environments that allow SMTP).
+    Send email using Brevo HTTPS API only (no SMTP fallback).
 
     Returns:
         tuple: (success: bool, error_message: str)
     """
-    # Log configuration status for debugging
-    print(f"[EMAIL DEBUG] EMAIL_ENABLED={settings.EMAIL_ENABLED}")
-    print(f"[EMAIL DEBUG] BREVO_API_KEY present: {bool(settings.BREVO_API_KEY)}")
-    print(f"[EMAIL DEBUG] MAIL_FROM={settings.MAIL_FROM}")
-    print(f"[EMAIL DEBUG] SMTP_ENABLED={settings.SMTP_ENABLED}")
-    
     if not settings.EMAIL_ENABLED:
         return False, "Email delivery is disabled. Please set EMAIL_ENABLED=true in your environment variables."
+
+    if not settings.BREVO_API_KEY:
+        return False, "BREVO_API_KEY is not configured. Please set BREVO_API_KEY in your environment variables."
 
     if not settings.MAIL_FROM:
         return False, "MAIL_FROM is not configured. Please set MAIL_FROM in your environment variables."
 
-    # First try Brevo HTTPS API if API key is configured
-    if settings.BREVO_API_KEY:
-        try:
-            payload = {
-                "sender": {
-                    "name": settings.MAIL_FROM_NAME,
-                    "email": settings.MAIL_FROM,
-                },
-                "to": [{"email": to_email}],
-                "subject": subject,
-                "htmlContent": html_content,
-                "textContent": text_content,
-            }
-
-            headers = {
-                "accept": "application/json",
-                "content-type": "application/json",
-                "api-key": settings.BREVO_API_KEY,
-            }
-
-            emit_audit_log(
-                action="email.send",
-                status="success",
-                message="Sending email via Brevo API.",
-                entity_type="email",
-                entity_id=to_email,
-            )
-            with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
-                response = client.post(
-                    "https://api.brevo.com/v3/smtp/email",
-                    headers=headers,
-                    json=payload,
-                )
-
-            if 200 <= response.status_code < 300:
-                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email}")
-                emit_audit_log(
-                    action="email.send",
-                    status="success",
-                    message="Email sent via Brevo API.",
-                    entity_type="email",
-                    entity_id=to_email,
-                )
-                return True, ""
-
-            error_msg = f"Brevo API error {response.status_code}: {response.text}"
-            print(f"[EMAIL ERROR] {error_msg}")
-            emit_audit_log(
-                action="email.send",
-                status="warning",
-                message="Brevo API error.",
-                entity_type="email",
-                entity_id=to_email,
-                details={"error": error_msg},
-            )
-            return False, error_msg
-
-        except Exception as e:
-            error_msg = f"Unexpected error calling Brevo API: {type(e).__name__}: {str(e)}"
-            print(f"[EMAIL EXCEPTION] {error_msg}")
-            import traceback
-            traceback.print_exc()
-            emit_audit_log(
-                action="email.send",
-                status="error",
-                message="Brevo API exception.",
-                entity_type="email",
-                entity_id=to_email,
-                details={"error": error_msg},
-            )
-            # fall through to SMTP fallback
-
-    # If BREVO_API_KEY was not set or failed, and SMTP is disabled, return helpful error
-    if not settings.SMTP_ENABLED:
-        if not settings.BREVO_API_KEY:
-            return False, "BREVO_API_KEY is not configured. Please set BREVO_API_KEY in your environment variables (e.g., in .env file)."
-        return False, "SMTP delivery is disabled and Brevo API failed. Please check your BREVO_API_KEY configuration."
-
-    if not settings.MAIL_SERVER or not settings.MAIL_PORT:
-        return False, "SMTP server configuration is incomplete."
-
-    if settings.USE_CREDENTIALS and (not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD):
-        return False, "SMTP credentials are not configured."
-
-    # Fallback: SMTP (useful for local dev if API key not configured)
-    server = None
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>"
-        msg["To"] = to_email
+        payload = {
+            "sender": {
+                "name": settings.MAIL_FROM_NAME,
+                "email": settings.MAIL_FROM,
+            },
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "htmlContent": html_content,
+            "textContent": text_content,
+        }
 
-        part1 = MIMEText(text_content, "plain", "utf-8")
-        part2 = MIMEText(html_content, "html", "utf-8")
-        msg.attach(part1)
-        msg.attach(part2)
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "api-key": settings.BREVO_API_KEY,
+        }
 
         emit_audit_log(
             action="email.send",
-            status="success",
-            message="Connecting to SMTP server.",
+            status="info",
+            message="Sending email via Brevo API.",
             entity_type="email",
             entity_id=to_email,
         )
-        server = smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT, timeout=30)
-        server.set_debuglevel(0)
+        
+        with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
+            response = client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers=headers,
+                json=payload,
+            )
 
-        if settings.MAIL_STARTTLS:
+        if 200 <= response.status_code < 300:
             emit_audit_log(
                 action="email.send",
                 status="success",
-                message="Starting SMTP TLS.",
+                message="Email sent via Brevo API.",
                 entity_type="email",
                 entity_id=to_email,
             )
-            server.starttls()
+            return True, ""
 
-        if settings.USE_CREDENTIALS:
-            emit_audit_log(
-                action="email.send",
-                status="success",
-                message="Authenticating with SMTP credentials.",
-                entity_type="email",
-                entity_id=to_email,
-            )
-            server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
+        error_msg = f"Brevo API error {response.status_code}: {response.text}"
+        emit_audit_log(
+            action="email.send",
+            status="error",
+            message="Brevo API error.",
+            entity_type="email",
+            entity_id=to_email,
+            details={"error": error_msg, "status_code": response.status_code},
+        )
+        return False, error_msg
 
-        emit_audit_log(
-            action="email.send",
-            status="success",
-            message="SMTP authentication successful, sending email.",
-            entity_type="email",
-            entity_id=to_email,
-        )
-        server.send_message(msg)
-        emit_audit_log(
-            action="email.send",
-            status="success",
-            message="Email sent via SMTP.",
-            entity_type="email",
-            entity_id=to_email,
-        )
-        return True, ""
-
-    except smtplib.SMTPAuthenticationError as e:
-        error_msg = (
-            f"SMTP Authentication failed: {str(e)}. Please verify: "
-            f"1) Username '{settings.MAIL_USERNAME}' is correct, "
-            f"2) API key is valid, "
-            f"3) Sender email '{settings.MAIL_FROM}' is verified in Brevo dashboard."
-        )
-        emit_audit_log(
-            action="email.send",
-            status="error",
-            message="SMTP authentication failed.",
-            entity_type="email",
-            entity_id=to_email,
-            details={"error": error_msg},
-        )
-        return False, error_msg
-    except smtplib.SMTPRecipientsRefused as e:
-        error_msg = f"Recipient email '{to_email}' was rejected by server: {str(e)}"
-        emit_audit_log(
-            action="email.send",
-            status="error",
-            message="SMTP recipient refused.",
-            entity_type="email",
-            entity_id=to_email,
-            details={"error": error_msg},
-        )
-        return False, error_msg
-    except smtplib.SMTPServerDisconnected as e:
-        error_msg = (
-            f"SMTP server disconnected: {str(e)}. "
-            f"Check your network connection and Brevo server status."
-        )
-        emit_audit_log(
-            action="email.send",
-            status="error",
-            message="SMTP server disconnected.",
-            entity_type="email",
-            entity_id=to_email,
-            details={"error": error_msg},
-        )
-        return False, error_msg
-    except smtplib.SMTPException as e:
-        error_msg = f"SMTP error occurred: {str(e)}"
-        emit_audit_log(
-            action="email.send",
-            status="error",
-            message="SMTP error occurred.",
-            entity_type="email",
-            entity_id=to_email,
-            details={"error": error_msg},
-        )
-        return False, error_msg
     except Exception as e:
-        error_msg = f"Unexpected error sending email via SMTP: {type(e).__name__}: {str(e)}"
+        error_msg = f"Unexpected error calling Brevo API: {type(e).__name__}: {str(e)}"
         emit_audit_log(
             action="email.send",
             status="error",
-            message="SMTP exception.",
+            message="Brevo API exception.",
             entity_type="email",
             entity_id=to_email,
             details={"error": error_msg},
@@ -290,12 +139,6 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
         import traceback
         traceback.print_exc()
         return False, error_msg
-    finally:
-        if server:
-            try:
-                server.quit()
-            except Exception:
-                pass
 
 
 @router.post("/init-superadmin")
@@ -720,44 +563,25 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
         © 2024 Cybercrime Investigation System. All rights reserved.
         """
         
-        # Send email
+        # Send email - only return success if email was actually sent
         success, error_message = send_email_via_brevo(request.email, subject, html_content, text_content)
         
         if not success:
-            # Log the error but don't rollback the user creation
-            # The user account is created, but email failed to send
+            # Rollback user creation if email fails
+            db.rollback()
             emit_audit_log(
                 action="investigator.create",
-                status="warning",
-                message=f"Investigator account created but email sending failed: {error_message}",
+                status="error",
+                message=f"Investigator account creation failed: email sending failed: {error_message}",
                 entity_type="user",
-                entity_id=new_user.id,
                 details={"email": request.email, "error": error_message}
             )
-            
-            # Get email configuration status for debugging
-            email_config_status = {
-                "EMAIL_ENABLED": settings.EMAIL_ENABLED,
-                "BREVO_API_KEY_PRESENT": bool(settings.BREVO_API_KEY),
-                "BREVO_API_KEY_LENGTH": len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 0,
-                "MAIL_FROM": settings.MAIL_FROM,
-                "MAIL_FROM_NAME": settings.MAIL_FROM_NAME,
-                "SMTP_ENABLED": settings.SMTP_ENABLED,
-            }
-            
-            # Return success with a warning about email - include detailed diagnostics
-            return {
-                "success": True,
-                "warning": f"Account created but email failed to send: {error_message}",
-                "message": f"Investigator account created successfully. Email sending failed - please check email configuration.",
-                "user_id": new_user.id,
-                "email": new_user.email,
-                "reset_link": reset_link,
-                "password": password,  # Include password in response if email failed
-                "email_error": error_message,
-                "email_config": email_config_status,
-            }
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send welcome email: {error_message}"
+            )
         
+        # Email sent successfully - return success with reset link
         return {
             "success": True,
             "message": f"Investigator account created and welcome email sent successfully to {request.email}",
