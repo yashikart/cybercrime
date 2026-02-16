@@ -118,26 +118,36 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
-      const authHeaders = getAuthHeaders();
-      console.log("Auth headers:", authHeaders);
-      console.log("Admin token exists:", !!localStorage.getItem("admin_token"));
-      console.log("Investigator token exists:", !!localStorage.getItem("investigator_token"));
-      console.log("Access token exists:", !!localStorage.getItem("access_token"));
+      // Get token directly to ensure it's available
+      const adminToken = localStorage.getItem("admin_token");
+      const investigatorToken = localStorage.getItem("investigator_token");
+      const accessToken = localStorage.getItem("access_token");
+      const token = adminToken || investigatorToken || accessToken;
       
-      const headers: HeadersInit = {
-        ...authHeaders,
-        "Content-Type": "application/json",
-      };
+      console.log("🔑 Token check:", {
+        adminToken: !!adminToken,
+        investigatorToken: !!investigatorToken,
+        accessToken: !!accessToken,
+        hasToken: !!token
+      });
       
-      console.log("Final headers being sent:", headers);
-      
-      // Debug: Log if token is missing
-      if (!authHeaders["Authorization"]) {
-        console.warn("No auth token found in localStorage. Available keys:", Object.keys(localStorage));
+      if (!token) {
+        console.error("❌ No auth token found! Available localStorage keys:", Object.keys(localStorage));
         setErrorMessage("Authentication required. Please log in again.");
         setSending(false);
         return;
       }
+      
+      // Build headers explicitly
+      const headers: HeadersInit = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+      
+      console.log("✅ Headers prepared:", { 
+        hasAuth: !!headers["Authorization"],
+        authValue: headers["Authorization"]?.substring(0, 20) + "..."
+      });
       
       const url = apiUrl(`messages/investigators/${selectedInvestigator}/message`);
       console.log("Sending POST to:", url);
@@ -192,23 +202,36 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
-      const authHeaders = getAuthHeaders();
-      console.log("Broadcast - Auth headers:", authHeaders);
+      // Get token directly to ensure it's available
+      const adminToken = localStorage.getItem("admin_token");
+      const investigatorToken = localStorage.getItem("investigator_token");
+      const accessToken = localStorage.getItem("access_token");
+      const token = adminToken || investigatorToken || accessToken;
       
-      const headers: HeadersInit = {
-        ...authHeaders,
-        "Content-Type": "application/json",
-      };
+      console.log("🔑 Broadcast - Token check:", {
+        adminToken: !!adminToken,
+        investigatorToken: !!investigatorToken,
+        accessToken: !!accessToken,
+        hasToken: !!token
+      });
       
-      console.log("Broadcast - Final headers:", headers);
-      
-      // Debug: Log if token is missing
-      if (!authHeaders["Authorization"]) {
-        console.warn("No auth token found in localStorage. Available keys:", Object.keys(localStorage));
+      if (!token) {
+        console.error("❌ No auth token found! Available localStorage keys:", Object.keys(localStorage));
         setErrorMessage("Authentication required. Please log in again.");
         setSending(false);
         return;
       }
+      
+      // Build headers explicitly
+      const headers: HeadersInit = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+      
+      console.log("✅ Broadcast - Headers prepared:", { 
+        hasAuth: !!headers["Authorization"],
+        authValue: headers["Authorization"]?.substring(0, 20) + "..."
+      });
       
       const url = apiUrl(`messages/broadcast`);
       console.log("Broadcast - Sending POST to:", url);
