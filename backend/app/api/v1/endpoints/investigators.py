@@ -97,14 +97,17 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
         emit_audit_log(
             action="email.send",
             status="info",
-            message="Sending email via Brevo API.",
+            message="Sending email via Brevo HTTPS API (not SMTP).",
             entity_type="email",
             entity_id=to_email,
         )
         
+        # Use Brevo HTTPS API (NOT SMTP) - works on Render free tier
+        # This is a standard HTTPS POST request, not SMTP protocol
+        # No SMTP ports (587/465) are used - only standard HTTPS port 443
         with httpx.Client(timeout=15.0, verify=settings.VALIDATE_CERTS) as client:
             response = client.post(
-                "https://api.brevo.com/v3/smtp/email",
+                "https://api.brevo.com/v3/smtp/email",  # API endpoint (uses HTTPS, not SMTP ports)
                 headers=headers,
                 json=payload,
             )
