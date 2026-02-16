@@ -179,7 +179,7 @@ export function ManualInvestigatorContent() {
       } else {
         setEmailResult({
           success: false,
-          message: data.detail || data.message || `Failed to send email (Status: ${response.status}). Please check SMTP configuration.`,
+          message: data.detail || data.message || `Failed to send email (Status: ${response.status}). Please check Brevo API configuration.`,
         });
       }
     } catch (error: any) {
