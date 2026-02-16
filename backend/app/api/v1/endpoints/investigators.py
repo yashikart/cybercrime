@@ -606,135 +606,173 @@ async def check_database_status():
 async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Depends(get_db)):
     """Create investigator account and send welcome email with auto-generated password and reset link"""
     
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == request.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail=f"User with email {request.email} already exists"
+    try:
+        # Check if user already exists
+        existing_user = db.query(User).filter(User.email == request.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User with email {request.email} already exists"
+            )
+        
+        # Generate unique password
+        password = generate_password(16)
+        
+        # Hash the password
+        hashed_password = get_password_hash(password)
+        
+        # Create user account in database
+        new_user = User(
+            email=request.email,
+            full_name=request.name or "Investigator",
+            hashed_password=hashed_password,
+            role="investigator",
+            is_active=True,
+            location_city=request.location_city,
+            location_country=request.location_country,
+            location_latitude=request.location_latitude,
+            location_longitude=request.location_longitude,
+            location_ip=request.location_ip
         )
-    
-    # Generate unique password
-    password = generate_password(16)
-    
-    # Hash the password
-    hashed_password = get_password_hash(password)
-    
-    # Create user account in database
-    new_user = User(
-        email=request.email,
-        full_name=request.name or "Investigator",
-        hashed_password=hashed_password,
-        role="investigator",
-        is_active=True,
-        location_city=request.location_city,
-        location_country=request.location_country,
-        location_latitude=request.location_latitude,
-        location_longitude=request.location_longitude,
-        location_ip=request.location_ip
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    # Generate password reset token (in production, store this in DB with expiration)
-    reset_token = secrets.token_urlsafe(32)
-    # Use FRONTEND_BASE_URL from settings, or default to Render frontend URL
-    base_url = settings.FRONTEND_BASE_URL or "https://cybercrime-frontend.onrender.com"
-    reset_link = f"{base_url.rstrip('/')}/reset-password?token={reset_token}&email={request.email}"
-    
-    # Email content
-    subject = "Welcome to Cybercrime Investigation System"
-    
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
-            .content {{ background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }}
-            .credentials {{ background: #1f2937; color: #10b981; padding: 15px; border-radius: 5px; margin: 20px 0; font-family: monospace; }}
-            .button {{ display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-            .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🔒 Cybercrime Investigation System</h1>
-            </div>
-            <div class="content">
-                <h2>Welcome, {request.name or 'Investigator'}!</h2>
-                <p>Your account has been created in the Cybercrime Investigation System. Below are your login credentials:</p>
-                
-                <div class="credentials">
-                    <strong>Email:</strong> {request.email}<br>
-                    <strong>Password:</strong> {password}
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        # Generate password reset token (in production, store this in DB with expiration)
+        reset_token = secrets.token_urlsafe(32)
+        # Use FRONTEND_BASE_URL from settings, or default to Render frontend URL
+        base_url = settings.FRONTEND_BASE_URL or "https://cybercrime-frontend.onrender.com"
+        reset_link = f"{base_url.rstrip('/')}/reset-password?token={reset_token}&email={request.email}"
+        
+        # Email content
+        subject = "Welcome to Cybercrime Investigation System"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }}
+                .credentials {{ background: #1f2937; color: #10b981; padding: 15px; border-radius: 5px; margin: 20px 0; font-family: monospace; }}
+                .button {{ display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🔒 Cybercrime Investigation System</h1>
                 </div>
-                
-                <p><strong>Important Security Notice:</strong></p>
-                <ul>
-                    <li>Please change your password immediately after first login</li>
-                    <li>Do not share your password with anyone</li>
-                    <li>If you did not request this account, please contact the administrator</li>
-                </ul>
-                
-                <p>To reset your password, click the button below:</p>
-                <a href="{reset_link}" class="button">Reset Password</a>
-                
-                <p>Or copy and paste this link into your browser:</p>
-                <p style="word-break: break-all; color: #6b7280; font-size: 12px;">{reset_link}</p>
+                <div class="content">
+                    <h2>Welcome, {request.name or 'Investigator'}!</h2>
+                    <p>Your account has been created in the Cybercrime Investigation System. Below are your login credentials:</p>
+                    
+                    <div class="credentials">
+                        <strong>Email:</strong> {request.email}<br>
+                        <strong>Password:</strong> {password}
+                    </div>
+                    
+                    <p><strong>Important Security Notice:</strong></p>
+                    <ul>
+                        <li>Please change your password immediately after first login</li>
+                        <li>Do not share your password with anyone</li>
+                        <li>If you did not request this account, please contact the administrator</li>
+                    </ul>
+                    
+                    <p>To reset your password, click the button below:</p>
+                    <a href="{reset_link}" class="button">Reset Password</a>
+                    
+                    <p>Or copy and paste this link into your browser:</p>
+                    <p style="word-break: break-all; color: #6b7280; font-size: 12px;">{reset_link}</p>
+                </div>
+                <div class="footer">
+                    <p>This is an automated message. Please do not reply to this email.</p>
+                    <p>&copy; 2024 Cybercrime Investigation System. All rights reserved.</p>
+                </div>
             </div>
-            <div class="footer">
-                <p>This is an automated message. Please do not reply to this email.</p>
-                <p>&copy; 2024 Cybercrime Investigation System. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+        </body>
+        </html>
+        """
+        
+        text_content = f"""
+        Welcome to Cybercrime Investigation System
+        
+        Hello {request.name or 'Investigator'},
+        
+        Your account has been created. Here are your login credentials:
+        
+        Email: {request.email}
+        Password: {password}
+        
+        Important Security Notice:
+        - Please change your password immediately after first login
+        - Do not share your password with anyone
+        - If you did not request this account, please contact the administrator
+        
+        To reset your password, visit:
+        {reset_link}
+        
+        This is an automated message. Please do not reply to this email.
+        
+        © 2024 Cybercrime Investigation System. All rights reserved.
+        """
+        
+        # Send email
+        success, error_message = send_email_via_brevo(request.email, subject, html_content, text_content)
+        
+        if not success:
+            # Log the error but don't rollback the user creation
+            # The user account is created, but email failed to send
+            emit_audit_log(
+                action="investigator.create",
+                status="warning",
+                message=f"Investigator account created but email sending failed: {error_message}",
+                entity_type="user",
+                entity_id=new_user.id,
+                details={"email": request.email, "error": error_message}
+            )
+            # Return success with a warning about email
+            return {
+                "success": True,
+                "warning": f"Account created but email failed to send: {error_message}",
+                "message": f"Investigator account created successfully. Email sending failed - please check email configuration.",
+                "user_id": new_user.id,
+                "email": new_user.email,
+                "reset_link": reset_link,
+                "password": password,  # Include password in response if email failed
+            }
+        
+        return {
+            "success": True,
+            "message": f"Investigator account created and welcome email sent successfully to {request.email}",
+            "user_id": new_user.id,
+            "email": new_user.email,
+            "reset_link": reset_link,
+        }
     
-    text_content = f"""
-    Welcome to Cybercrime Investigation System
-    
-    Hello {request.name or 'Investigator'},
-    
-    Your account has been created. Here are your login credentials:
-    
-    Email: {request.email}
-    Password: {password}
-    
-    Important Security Notice:
-    - Please change your password immediately after first login
-    - Do not share your password with anyone
-    - If you did not request this account, please contact the administrator
-    
-    To reset your password, visit:
-    {reset_link}
-    
-    This is an automated message. Please do not reply to this email.
-    
-    © 2024 Cybercrime Investigation System. All rights reserved.
-    """
-    
-    # Send email
-    success, error_message = send_email_via_brevo(request.email, subject, html_content, text_content)
-    
-    if not success:
-        raise HTTPException(
-            status_code=500, 
-            detail=error_message or "Failed to send welcome email. Please check SMTP configuration."
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 400 for existing user)
+        raise
+    except Exception as e:
+        # Rollback database transaction on any unexpected error
+        db.rollback()
+        error_msg = f"Unexpected error creating investigator account: {type(e).__name__}: {str(e)}"
+        emit_audit_log(
+            action="investigator.create",
+            status="error",
+            message=error_msg,
+            entity_type="user",
+            details={"email": request.email, "error": str(e)}
         )
-    
-    return {
-        "success": True,
-        "message": f"Investigator account created and welcome email sent successfully to {request.email}",
-        "user_id": new_user.id,
-        "email": new_user.email,
-        "reset_link": reset_link,
-    }
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=error_msg
+        )
 
 
 @router.get("/{investigator_id}/activity")
