@@ -176,24 +176,47 @@ async def get_priority_queue(
     if not items:
         return {"items": []}
 
-    prompt = (
-        "You are a triage assistant for a cybercrime dashboard.\n"
-        "For each item, assign:\n"
-        '- \"priority_score\" between 0 and 100 (higher = more urgent)\n'
-        '- \"recommended_action\" from [\"freeze\", \"monitor\", \"escalate\", \"review_later\"].\n\n'
-        f"Items:\n{items}\n\n"
-        "Return ONLY JSON: {\"items\": [{\"id\": \"...\", \"priority_score\": 90, \"recommended_action\": \"freeze\"}, ...]}"
-    )
+    # Try to get AI priority scores, but fall back to heuristic scoring if AI fails
+    scores_map = {}
+    try:
+        prompt = (
+            "You are a triage assistant for a cybercrime dashboard.\n"
+            "For each item, assign:\n"
+            '- \"priority_score\" between 0 and 100 (higher = more urgent)\n'
+            '- \"recommended_action\" from [\"freeze\", \"monitor\", \"escalate\", \"review_later\"].\n\n'
+            f"Items:\n{items}\n\n"
+            "Return ONLY JSON: {\"items\": [{\"id\": \"...\", \"priority_score\": 90, \"recommended_action\": \"freeze\"}, ...]}"
+        )
 
-    ai_result = await call_openrouter_json(prompt)
-    scores_map = {
-        row.get("id"): row for row in ai_result.get("items", []) if isinstance(row, dict) and row.get("id")
-    }
+        ai_result = await call_openrouter_json(prompt)
+        scores_map = {
+            row.get("id"): row for row in ai_result.get("items", []) if isinstance(row, dict) and row.get("id")
+        }
+    except Exception as e:
+        # If AI call fails, log error but continue with heuristic scoring
+        emit_audit_log(
+            action="dashboard.priority_queue",
+            status="warning",
+            message="AI priority scoring failed, using heuristic fallback.",
+            details={"error": str(e)},
+        )
+        print(f"[WARNING] Priority queue AI scoring failed: {e}")
 
+    # Enrich items with priority scores (from AI or heuristic fallback)
     enriched = []
     for item in items:
         row = scores_map.get(item["id"], {})
-        item["priority_score"] = int(row.get("priority_score", 0))
+        
+        # Use AI score if available, otherwise calculate heuristic score
+        if "priority_score" in row:
+            item["priority_score"] = int(row.get("priority_score", 0))
+        else:
+            # Heuristic scoring: higher risk_score and age = higher priority
+            base_score = int((item.get("risk_score", 0) * 50))  # Risk contributes up to 50 points
+            age_score = min(int(item.get("age_hours", 0) * 2), 30)  # Age contributes up to 30 points
+            evidence_bonus = 10 if item.get("has_evidence", False) else 0  # Evidence bonus
+            item["priority_score"] = base_score + age_score + evidence_bonus
+        
         item["recommended_action"] = row.get("recommended_action", "review_later")
         enriched.append(item)
 
