@@ -32,6 +32,16 @@ interface DatabaseStatus {
 interface EmailResponse {
   success: boolean;
   message: string;
+  warning?: string;
+  email_error?: string;
+  email_config?: {
+    EMAIL_ENABLED?: boolean;
+    BREVO_API_KEY_PRESENT?: boolean;
+    BREVO_API_KEY_LENGTH?: number;
+    MAIL_FROM?: string;
+    MAIL_FROM_NAME?: string;
+    SMTP_ENABLED?: boolean;
+  };
   user_id?: number;
   email?: string;
   password?: string;
@@ -566,6 +576,38 @@ export function ManualInvestigatorContent() {
                 }`}>
                   {emailResult.message}
                 </p>
+
+                {/* Show warning if email failed but account was created */}
+                {emailResult.success && emailResult.warning && (
+                  <div className="mt-3 p-3 bg-yellow-950/20 border border-yellow-500/30 rounded">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-yellow-400 font-mono text-xs font-semibold mb-1">Email Warning:</p>
+                        <p className="text-yellow-300 font-mono text-xs">{emailResult.warning}</p>
+                        {emailResult.email_error && (
+                          <p className="text-yellow-200 font-mono text-xs mt-2 opacity-80">
+                            Error: {emailResult.email_error}
+                          </p>
+                        )}
+                        {emailResult.email_config && (
+                          <div className="mt-3 p-2 bg-black/40 rounded border border-yellow-500/20">
+                            <p className="text-yellow-400 font-mono text-xs font-semibold mb-1">Email Configuration:</p>
+                            <ul className="text-yellow-200 font-mono text-xs space-y-1">
+                              <li>• EMAIL_ENABLED: {emailResult.email_config.EMAIL_ENABLED ? "✓ true" : "✗ false"}</li>
+                              <li>• BREVO_API_KEY: {emailResult.email_config.BREVO_API_KEY_PRESENT ? `✓ present (${emailResult.email_config.BREVO_API_KEY_LENGTH} chars)` : "✗ missing"}</li>
+                              <li>• MAIL_FROM: {emailResult.email_config.MAIL_FROM || "✗ not set"}</li>
+                              <li>• SMTP_ENABLED: {emailResult.email_config.SMTP_ENABLED ? "✓ true" : "✗ false"}</li>
+                            </ul>
+                            <p className="text-yellow-300 font-mono text-xs mt-2 pt-2 border-t border-yellow-500/20">
+                              💡 To fix: Set EMAIL_ENABLED=true, BREVO_API_KEY (your xkeysib-... key), and MAIL_FROM (verified email) in Render environment variables.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {emailResult.success && emailResult.password && (
                   <div className="space-y-3 mt-4">

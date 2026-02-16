@@ -734,7 +734,18 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
                 entity_id=new_user.id,
                 details={"email": request.email, "error": error_message}
             )
-            # Return success with a warning about email
+            
+            # Get email configuration status for debugging
+            email_config_status = {
+                "EMAIL_ENABLED": settings.EMAIL_ENABLED,
+                "BREVO_API_KEY_PRESENT": bool(settings.BREVO_API_KEY),
+                "BREVO_API_KEY_LENGTH": len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 0,
+                "MAIL_FROM": settings.MAIL_FROM,
+                "MAIL_FROM_NAME": settings.MAIL_FROM_NAME,
+                "SMTP_ENABLED": settings.SMTP_ENABLED,
+            }
+            
+            # Return success with a warning about email - include detailed diagnostics
             return {
                 "success": True,
                 "warning": f"Account created but email failed to send: {error_message}",
@@ -743,6 +754,8 @@ async def send_welcome_email(request: SendWelcomeEmailRequest, db: Session = Dep
                 "email": new_user.email,
                 "reset_link": reset_link,
                 "password": password,  # Include password in response if email failed
+                "email_error": error_message,
+                "email_config": email_config_status,
             }
         
         return {
