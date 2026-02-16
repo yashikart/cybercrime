@@ -3412,8 +3412,14 @@ function NotificationBell({
   const fetchRecentMessages = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(
-        apiUrl(`messages/investigators/${investigatorId}/messages?limit=5`)
+        apiUrl(`messages/investigators/${investigatorId}/messages?limit=5`),
+        { headers }
       );
       if (response.ok) {
         const data = await response.json();
@@ -3594,8 +3600,14 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
   const fetchMessages = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(
-        apiUrl(`messages/investigators/${investigatorId}/messages?unread_only=${filter === "unread"}`)
+        apiUrl(`messages/investigators/${investigatorId}/messages?unread_only=${filter === "unread"}`),
+        { headers }
       );
       if (response.ok) {
         const data = await response.json();
@@ -3611,9 +3623,14 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
 
   const handleMarkAsRead = async (messageId: number) => {
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(
         apiUrl(`messages/messages/${messageId}/read`),
-        { method: "PATCH" }
+        { method: "PATCH", headers }
       );
       if (response.ok) {
         setMessages((prev) =>
@@ -3636,11 +3653,16 @@ function MessagesSection({ investigatorId, onMarkAsRead }: { investigatorId: num
 
     setReplying(true);
     try {
+      const token = localStorage.getItem("investigator_token") || localStorage.getItem("access_token");
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(
         apiUrl(`messages/investigators/${investigatorId}/reply?message_id=${selectedMessage.id}`),
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             content: replyContent,
             priority: replyPriority,
