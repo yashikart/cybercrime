@@ -2718,6 +2718,19 @@ paths:
       summary: Check Database Status
       tags:
       - investigators
+  /api/v1/investigators/email-config:
+    get:
+      description: Check email configuration status
+      operationId: check_email_config_api_v1_investigators_email_config_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Check Email Config
+      tags:
+      - investigators
   /api/v1/investigators/delete-all-investigators:
     delete:
       description: Delete all investigator accounts (except superadmin)
