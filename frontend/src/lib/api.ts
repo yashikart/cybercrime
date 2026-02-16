@@ -36,6 +36,8 @@ export function getAuthHeaders(): HeadersInit {
   const headers: HeadersInit = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    console.warn("⚠️ No authentication token found in localStorage. Available keys:", Object.keys(localStorage));
   }
   return headers;
 }
