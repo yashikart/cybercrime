@@ -133,6 +133,14 @@ class Settings(BaseSettings):
     # Set BREVO_API_KEY to your "xkeysib-..." key from Brevo. When present,
     # the app will use the HTTPS API instead of SMTP to send emails.
     BREVO_API_KEY: Optional[str] = None
+    
+    @field_validator("BREVO_API_KEY", mode="before")
+    @classmethod
+    def validate_brevo_api_key(cls, v):
+        """Trim whitespace from BREVO_API_KEY if present"""
+        if v and isinstance(v, str):
+            return v.strip()
+        return v
 
     @field_validator("SECRET_KEY", mode="before")
     @classmethod

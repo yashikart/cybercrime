@@ -69,6 +69,12 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
     Returns:
         tuple: (success: bool, error_message: str)
     """
+    # Log configuration status for debugging
+    print(f"[EMAIL DEBUG] EMAIL_ENABLED={settings.EMAIL_ENABLED}")
+    print(f"[EMAIL DEBUG] BREVO_API_KEY present: {bool(settings.BREVO_API_KEY)}")
+    print(f"[EMAIL DEBUG] MAIL_FROM={settings.MAIL_FROM}")
+    print(f"[EMAIL DEBUG] SMTP_ENABLED={settings.SMTP_ENABLED}")
+    
     if not settings.EMAIL_ENABLED:
         return False, "Email delivery is disabled. Please set EMAIL_ENABLED=true in your environment variables."
 
@@ -110,6 +116,7 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
                 )
 
             if 200 <= response.status_code < 300:
+                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email}")
                 emit_audit_log(
                     action="email.send",
                     status="success",
@@ -120,6 +127,7 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
                 return True, ""
 
             error_msg = f"Brevo API error {response.status_code}: {response.text}"
+            print(f"[EMAIL ERROR] {error_msg}")
             emit_audit_log(
                 action="email.send",
                 status="warning",
@@ -132,6 +140,9 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
 
         except Exception as e:
             error_msg = f"Unexpected error calling Brevo API: {type(e).__name__}: {str(e)}"
+            print(f"[EMAIL EXCEPTION] {error_msg}")
+            import traceback
+            traceback.print_exc()
             emit_audit_log(
                 action="email.send",
                 status="error",
@@ -140,8 +151,6 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
                 entity_id=to_email,
                 details={"error": error_msg},
             )
-            import traceback
-            traceback.print_exc()
             # fall through to SMTP fallback
 
     # If BREVO_API_KEY was not set or failed, and SMTP is disabled, return helpful error
@@ -552,6 +561,21 @@ async def delete_investigator(investigator_id: int, db: Session = Depends(get_db
         "message": f"Investigator {investigator.email} deleted successfully",
         "deleted_id": investigator_id
     }
+
+
+@router.get("/email-config")
+async def check_email_config():
+    """Check email configuration status"""
+    config_status = {
+        "EMAIL_ENABLED": settings.EMAIL_ENABLED,
+        "BREVO_API_KEY_PRESENT": bool(settings.BREVO_API_KEY),
+        "BREVO_API_KEY_LENGTH": len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 0,
+        "MAIL_FROM": settings.MAIL_FROM,
+        "MAIL_FROM_NAME": settings.MAIL_FROM_NAME,
+        "SMTP_ENABLED": settings.SMTP_ENABLED,
+        "FRONTEND_BASE_URL": settings.FRONTEND_BASE_URL,
+    }
+    return config_status
 
 
 @router.get("/database/status")
