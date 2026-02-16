@@ -17,6 +17,31 @@ from app.api.v1.schemas import WalletResponse, WalletCreate
 router = APIRouter()
 
 
+def _freeze_fields_available() -> bool:
+    """Check whether wallet freeze/unfreeze fields exist on the SQLAlchemy model."""
+    required_fields = (
+        "is_frozen",
+        "frozen_by",
+        "freeze_reason",
+        "frozen_at",
+        "unfrozen_by",
+        "unfreeze_reason",
+        "unfrozen_at",
+    )
+    return all(hasattr(Wallet, field) for field in required_fields)
+
+
+def _ensure_freeze_fields_or_503() -> None:
+    if not _freeze_fields_available():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Wallet freeze/unfreeze fields are not available in this deployment. "
+                "Please run the latest database/model migration for wallet freeze support."
+            ),
+        )
+
+
 class FreezeWalletRequest(BaseModel):
     freeze_reason: str
     frozen_by: str  # Admin email
@@ -157,13 +182,22 @@ async def search_wallet(wallet_address: str, db: Session = Depends(get_db)):
             "address": wallet.address,
             "label": wallet.label,
             "risk_level": wallet.risk_level,
-            "is_frozen": wallet.is_frozen,
-            "frozen_by": wallet.frozen_by,
-            "freeze_reason": wallet.freeze_reason,
-            "frozen_at": wallet.frozen_at.isoformat() if wallet.frozen_at else None,
-            "unfrozen_by": wallet.unfrozen_by,
-            "unfreeze_reason": wallet.unfreeze_reason,
-            "unfrozen_at": wallet.unfrozen_at.isoformat() if wallet.unfrozen_at else None,
+            # Backward-compatible defaults for deployments that don't yet have freeze columns
+            "is_frozen": getattr(wallet, "is_frozen", False),
+            "frozen_by": getattr(wallet, "frozen_by", None),
+            "freeze_reason": getattr(wallet, "freeze_reason", None),
+            "frozen_at": (
+                getattr(wallet, "frozen_at").isoformat()
+                if getattr(wallet, "frozen_at", None)
+                else None
+            ),
+            "unfrozen_by": getattr(wallet, "unfrozen_by", None),
+            "unfreeze_reason": getattr(wallet, "unfreeze_reason", None),
+            "unfrozen_at": (
+                getattr(wallet, "unfrozen_at").isoformat()
+                if getattr(wallet, "unfrozen_at", None)
+                else None
+            ),
             "created_at": wallet.created_at.isoformat() if wallet.created_at else None,
         },
         "risk_score": avg_risk_score if avg_risk_score > 0 else 0,
@@ -181,6 +215,7 @@ async def search_wallet(wallet_address: str, db: Session = Depends(get_db)):
 @router.post("/{wallet_id}/freeze")
 async def freeze_wallet(wallet_id: int, request: FreezeWalletRequest, db: Session = Depends(get_db)):
     """Freeze a wallet"""
+    _ensure_freeze_fields_or_503()
     wallet = db.query(Wallet).filter(Wallet.id == wallet_id).first()
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
@@ -213,6 +248,7 @@ async def freeze_wallet(wallet_id: int, request: FreezeWalletRequest, db: Sessio
 @router.post("/{wallet_id}/unfreeze")
 async def unfreeze_wallet(wallet_id: int, request: UnfreezeWalletRequest, db: Session = Depends(get_db)):
     """Unfreeze a wallet"""
+    _ensure_freeze_fields_or_503()
     wallet = db.query(Wallet).filter(Wallet.id == wallet_id).first()
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
@@ -242,6 +278,7 @@ async def unfreeze_wallet(wallet_id: int, request: UnfreezeWalletRequest, db: Se
 @router.get("/frozen/list")
 async def get_frozen_wallets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all frozen wallets"""
+    _ensure_freeze_fields_or_503()
     wallets = (
         db.query(Wallet)
         .filter(Wallet.is_frozen == True)
@@ -277,6 +314,7 @@ async def get_frozen_wallets(skip: int = 0, limit: int = 100, db: Session = Depe
 @router.get("/unfrozen/list")
 async def get_unfrozen_wallets(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all unfrozen wallets (previously frozen)"""
+    _ensure_freeze_fields_or_503()
     wallets = (
         db.query(Wallet)
         .filter(Wallet.is_frozen == False)
