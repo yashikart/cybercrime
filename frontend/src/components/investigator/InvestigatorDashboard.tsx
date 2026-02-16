@@ -1721,11 +1721,24 @@ function AIAnalysisSection() {
     }
   };
 
-  const getRiskBadgeColor = (score: number) => {
-    if (score >= 0.8) return "bg-red-950/40 border-red-500/30 text-red-400";
-    if (score >= 0.6) return "bg-orange-950/40 border-orange-500/30 text-orange-400";
-    if (score >= 0.4) return "bg-yellow-950/40 border-yellow-500/30 text-yellow-400";
-    return "bg-green-950/40 border-green-500/30 text-green-400";
+  const getRiskBadgeColor = (risk: number | string | undefined) => {
+    // Handle string risk levels
+    if (typeof risk === "string") {
+      const upper = risk.toUpperCase();
+      if (upper.includes("CRITICAL") || upper.includes("HIGH")) return "bg-red-950/40 border-red-500/30 text-red-400";
+      if (upper.includes("MEDIUM") || upper.includes("MODERATE")) return "bg-orange-950/40 border-orange-500/30 text-orange-400";
+      if (upper.includes("LOW")) return "bg-green-950/40 border-green-500/30 text-green-400";
+      return "bg-yellow-950/40 border-yellow-500/30 text-yellow-400";
+    }
+    // Handle numeric risk scores
+    if (typeof risk === "number") {
+      if (risk >= 0.8) return "bg-red-950/40 border-red-500/30 text-red-400";
+      if (risk >= 0.6) return "bg-orange-950/40 border-orange-500/30 text-orange-400";
+      if (risk >= 0.4) return "bg-yellow-950/40 border-yellow-500/30 text-yellow-400";
+      return "bg-green-950/40 border-green-500/30 text-green-400";
+    }
+    // Default
+    return "bg-gray-950/40 border-gray-500/30 text-gray-400";
   };
 
   const formatDate = (dateString: string) => {
@@ -1903,7 +1916,7 @@ function AIAnalysisSection() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12">
+                  <td colSpan={7} className="py-12">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
                       <p className="text-gray-500 font-mono text-sm">Loading reports...</p>
@@ -1912,7 +1925,7 @@ function AIAnalysisSection() {
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12">
+                  <td colSpan={7} className="py-12">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-emerald-500/10 rounded-lg border border-cyan-500/20">
                         <BarChart3 className="w-12 h-12 text-gray-600" />
@@ -1938,37 +1951,44 @@ function AIAnalysisSection() {
                         </div>
                       )}
                     </td>
+                    {/* Risk Assessment Column */}
                     <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
-                          {report.notes ? report.notes.length : 0} notes
-                        </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {report.risk_score != null ? (
+                          <div className={`px-2 py-1 rounded font-mono text-xs border ${getRiskBadgeColor(report.risk_score)}`}>
+                            {(report.risk_score * 100).toFixed(0)}%
+                          </div>
+                        ) : null}
+                        {report.risk_level ? (
+                          <span className={`px-2 py-1 rounded font-mono text-xs border ${getRiskBadgeColor(report.risk_level)}`}>
+                            {report.risk_level.toUpperCase()}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-600 font-mono">N/A</span>
+                        )}
                       </div>
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`px-2 py-1 rounded font-mono text-xs border ${getRiskBadgeColor(report.risk_score)}`}>
-                          {(report.risk_score * 100).toFixed(0)}%
-                        </div>
-                        <span className="text-xs text-gray-500 font-mono">
-                          {report.risk_level}
-                        </span>
-                      </div>
-                    </td>
+                    {/* Detected Patterns Column */}
                     <td className="py-4 px-4">
                       <div className="flex flex-wrap gap-1">
-                        {report.detected_patterns?.slice(0, 2).map((pattern: string, index: number) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono"
-                          >
-                            {pattern.length > 20 ? pattern.substring(0, 20) + "..." : pattern}
-                          </span>
-                        ))}
-                        {report.detected_patterns?.length > 2 && (
-                          <span className="px-2 py-1 bg-gray-950/40 border border-gray-500/30 text-gray-400 text-xs rounded font-mono">
-                            +{report.detected_patterns.length - 2}
-                          </span>
+                        {report.detected_patterns && report.detected_patterns.length > 0 ? (
+                          <>
+                            {report.detected_patterns.slice(0, 2).map((pattern: string, index: number) => (
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono"
+                              >
+                                {pattern.length > 20 ? pattern.substring(0, 20) + "..." : pattern}
+                              </span>
+                            ))}
+                            {report.detected_patterns.length > 2 && (
+                              <span className="px-2 py-1 bg-gray-950/40 border border-gray-500/30 text-gray-400 text-xs rounded font-mono">
+                                +{report.detected_patterns.length - 2}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-600 font-mono">No patterns</span>
                         )}
                       </div>
                     </td>
@@ -1988,10 +2008,28 @@ function AIAnalysisSection() {
                         </SelectContent>
                       </Select>
                     </td>
+                    {/* Notes Column */}
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        {report.notes && Array.isArray(report.notes) ? (
+                          <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
+                            {report.notes.length} {report.notes.length === 1 ? "note" : "notes"}
+                          </span>
+                        ) : report.notes ? (
+                          <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs rounded font-mono">
+                            1 note
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-600 font-mono">0 notes</span>
+                        )}
+                      </div>
+                    </td>
+                    {/* Created Column */}
                     <td className="py-4 px-4">
                       <div className="text-sm text-gray-400 font-mono">{formatDate(report.created_at)}</div>
                       <div className="text-xs text-gray-600 font-mono">{formatTime(report.created_at)}</div>
                     </td>
+                    {/* Actions Column */}
                     <td className="py-4 px-4">
                       <Button
                         onClick={() => handleViewReport(report._id)}
