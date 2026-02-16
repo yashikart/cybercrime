@@ -118,7 +118,20 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
-      const headers = { ...getAuthHeaders(), "Content-Type": "application/json" };
+      const authHeaders = getAuthHeaders();
+      const headers: HeadersInit = {
+        ...authHeaders,
+        "Content-Type": "application/json",
+      };
+      
+      // Debug: Log if token is missing
+      if (!authHeaders["Authorization"]) {
+        console.warn("No auth token found in localStorage. Available keys:", Object.keys(localStorage));
+        setErrorMessage("Authentication required. Please log in again.");
+        setSending(false);
+        return;
+      }
+      
       const response = await fetch(
         apiUrl(`messages/investigators/${selectedInvestigator}/message`),
         {
@@ -169,7 +182,20 @@ export function InvestigatorCommunicationContent() {
     setSuccessMessage("");
     
     try {
-      const headers = { ...getAuthHeaders(), "Content-Type": "application/json" };
+      const authHeaders = getAuthHeaders();
+      const headers: HeadersInit = {
+        ...authHeaders,
+        "Content-Type": "application/json",
+      };
+      
+      // Debug: Log if token is missing
+      if (!authHeaders["Authorization"]) {
+        console.warn("No auth token found in localStorage. Available keys:", Object.keys(localStorage));
+        setErrorMessage("Authentication required. Please log in again.");
+        setSending(false);
+        return;
+      }
+      
       const response = await fetch(
         apiUrl(`messages/broadcast`),
         {
