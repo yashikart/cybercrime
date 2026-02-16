@@ -28,7 +28,6 @@ type InvestigatorSection =
   | "evidence-upload"
   | "evidence-library"
   | "ai-analysis"
-  | "watchlist"
   | "contact-police"
   | "complaint-history"
   | "messages"
@@ -134,7 +133,6 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
     { id: "evidence-upload" as InvestigatorSection, label: "Evidence Upload", icon: Upload, color: "cyan" },
     { id: "evidence-library" as InvestigatorSection, label: "Evidence Library", icon: FolderOpen, color: "emerald" },
     { id: "ai-analysis" as InvestigatorSection, label: "AI Analysis History", icon: Brain, color: "cyan" },
-    { id: "watchlist" as InvestigatorSection, label: "Watchlist & Monitoring", icon: Shield, color: "emerald" },
     { id: "contact-police" as InvestigatorSection, label: "File Complaint", icon: Phone, color: "emerald" },
     { id: "complaint-history" as InvestigatorSection, label: "Complaint History", icon: Clipboard, color: "cyan" },
     { id: "messages" as InvestigatorSection, label: "Messages", icon: Mail, color: "purple" },
@@ -323,7 +321,6 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
             <EvidenceLibrarySection walletFilter={evidenceWalletFilter} />
           )}
           {activeSection === "ai-analysis" && <AIAnalysisSection />}
-          {activeSection === "watchlist" && <WatchlistSection />}
           {activeSection === "contact-police" && (
             <ContactPoliceSection
               onUseWalletForEvidence={(walletId: string) => {
