@@ -5,6 +5,7 @@ Admin endpoints for managing investigators
 import secrets
 import string
 from typing import Optional, List
+from email.utils import parseaddr
 
 import httpx
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
@@ -56,6 +57,31 @@ def generate_password(length: int = 12) -> str:
     return password
 
 
+def _resolve_brevo_sender() -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Resolve sender email/name for Brevo payload.
+    Accepts MAIL_FROM as either:
+      - plain email: sender@example.com
+      - RFC style:   Sender Name <sender@example.com>
+    """
+    raw_mail_from = (settings.MAIL_FROM or "").strip()
+    if not raw_mail_from:
+        return None, None, "MAIL_FROM is not configured. Set MAIL_FROM to a verified sender email in Brevo."
+
+    parsed_name, parsed_email = parseaddr(raw_mail_from)
+    sender_email = (parsed_email or "").strip()
+    if not sender_email or "@" not in sender_email:
+        return (
+            None,
+            None,
+            f"MAIL_FROM must be a valid sender email. Current value: '{raw_mail_from}'. "
+            "Example: noreply@yourdomain.com or 'Cybercrime Team <noreply@yourdomain.com>'.",
+        )
+
+    sender_name = (settings.MAIL_FROM_NAME or "").strip() or (parsed_name or "").strip() or "Cybercrime Investigation System"
+    return sender_email, sender_name, None
+
+
 def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_content: str) -> tuple[bool, str]:
     """
     Send email using Brevo HTTPS API (NOT SMTP).
@@ -73,14 +99,15 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
     if not settings.BREVO_API_KEY:
         return False, "BREVO_API_KEY is not configured. Please set BREVO_API_KEY in your environment variables."
 
-    if not settings.MAIL_FROM:
-        return False, "MAIL_FROM is not configured. Please set MAIL_FROM in your environment variables."
+    sender_email, sender_name, sender_error = _resolve_brevo_sender()
+    if sender_error:
+        return False, sender_error
 
     try:
         payload = {
             "sender": {
-                "name": settings.MAIL_FROM_NAME,
-                "email": settings.MAIL_FROM,
+                "name": sender_name,
+                "email": sender_email,
             },
             "to": [{"email": to_email}],
             "subject": subject,
@@ -122,7 +149,14 @@ def send_email_via_brevo(to_email: str, subject: str, html_content: str, text_co
             )
             return True, ""
 
-        error_msg = f"Brevo API error {response.status_code}: {response.text}"
+        response_text = response.text or ""
+        if response.status_code == 400 and "valid sender email required" in response_text.lower():
+            error_msg = (
+                "Brevo rejected MAIL_FROM. Use a real verified sender email in Brevo. "
+                f"Current MAIL_FROM='{settings.MAIL_FROM}'."
+            )
+        else:
+            error_msg = f"Brevo API error {response.status_code}: {response_text}"
         emit_audit_log(
             action="email.send",
             status="error",
@@ -416,11 +450,15 @@ async def delete_investigator(investigator_id: int, db: Session = Depends(get_db
 @router.get("/email-config")
 async def check_email_config():
     """Check email configuration status"""
+    sender_email, _, sender_error = _resolve_brevo_sender()
     config_status = {
         "EMAIL_ENABLED": settings.EMAIL_ENABLED,
         "BREVO_API_KEY_PRESENT": bool(settings.BREVO_API_KEY),
         "BREVO_API_KEY_LENGTH": len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 0,
         "MAIL_FROM": settings.MAIL_FROM,
+        "MAIL_FROM_PARSED_EMAIL": sender_email,
+        "MAIL_FROM_VALID": sender_error is None,
+        "MAIL_FROM_ERROR": sender_error,
         "MAIL_FROM_NAME": settings.MAIL_FROM_NAME,
         "FRONTEND_BASE_URL": settings.FRONTEND_BASE_URL,
     }

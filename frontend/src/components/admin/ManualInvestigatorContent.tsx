@@ -177,9 +177,22 @@ export function ManualInvestigatorContent() {
         setLocationIP("");
         fetchInvestigators(); // Refresh the investigators list
       } else {
+        const detail =
+          typeof data?.detail === "string"
+            ? data.detail
+            : Array.isArray(data?.detail)
+              ? data.detail.map((d: any) => d?.msg || JSON.stringify(d)).join(", ")
+              : undefined;
+        const message =
+          typeof data?.message === "string"
+            ? data.message
+            : undefined;
         setEmailResult({
           success: false,
-          message: data.detail || data.message || `Failed to send email (Status: ${response.status}). Please check Brevo API configuration.`,
+          message:
+            detail ||
+            message ||
+            `Failed to send email (Status: ${response.status}). Please check Brevo API configuration.`,
         });
       }
     } catch (error: any) {
