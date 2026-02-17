@@ -133,6 +133,16 @@ class Settings(BaseSettings):
     # Set BREVO_API_KEY to your "xkeysib-..." key from Brevo. When present,
     # the app will use the HTTPS API instead of SMTP to send emails.
     BREVO_API_KEY: Optional[str] = None
+
+    # Sovereign integrations (BHIV Bucket/Core application contracts)
+    BHIV_BUCKET_EVIDENCE_URL: Optional[str] = None
+    BHIV_BUCKET_API_KEY: Optional[str] = None
+    BHIV_CORE_EVENT_URL: Optional[str] = None
+    BHIV_INTEGRATION_TIMEOUT_SECONDS: float = 10.0
+    EVENT_RETRY_MAX_ATTEMPTS: int = 3
+    EVENT_BUFFER_PATH: str = "./event_buffer/events.jsonl"
+    KAFKA_BOOTSTRAP_SERVERS: Optional[str] = None
+    KAFKA_EVENT_TOPIC: str = "cybercrime-governance-events"
     
     @field_validator("BREVO_API_KEY", mode="before")
     @classmethod

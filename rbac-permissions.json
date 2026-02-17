@@ -5,7 +5,7 @@
     {
       "role": "public",
       "methods": ["GET"],
-      "paths": ["/", "/health", "/api/docs*", "/api/redoc*", "/openapi.json", "/api/openapi.json"]
+      "paths": ["/", "/health", "/api/v1/system/health", "/api/docs*", "/api/redoc*", "/openapi.json", "/api/openapi.json"]
     },
     {
       "role": "public",

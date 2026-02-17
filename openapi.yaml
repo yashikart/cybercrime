@@ -764,6 +764,11 @@ components:
           - type: integer
           - type: 'null'
           title: Recipient Id
+        recipient_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recipient Name
         sender_email:
           anyOf:
           - type: string
@@ -791,6 +796,7 @@ components:
       - read_at
       - sender_email
       - recipient_email
+      - recipient_name
       title: MessageResponse
       type: object
     PasswordResetRequest:
@@ -1375,6 +1381,20 @@ components:
       - last_activity
       - created_at
       title: WalletResponse
+      type: object
+    WatchlistAddRequest:
+      properties:
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        wallet_address:
+          title: Wallet Address
+          type: string
+      required:
+      - wallet_address
+      title: WatchlistAddRequest
       type: object
   securitySchemes:
     OAuth2PasswordBearer:
@@ -2718,19 +2738,6 @@ paths:
       summary: Check Database Status
       tags:
       - investigators
-  /api/v1/investigators/email-config:
-    get:
-      description: Check email configuration status (diagnostic endpoint)
-      operationId: check_email_config_api_v1_investigators_email_config_get
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-      summary: Check Email Config
-      tags:
-      - investigators
   /api/v1/investigators/delete-all-investigators:
     delete:
       description: Delete all investigator accounts (except superadmin)
@@ -2742,6 +2749,19 @@ paths:
               schema: {}
           description: Successful Response
       summary: Delete All Investigators
+      tags:
+      - investigators
+  /api/v1/investigators/email-config:
+    get:
+      description: Check email configuration status
+      operationId: check_email_config_api_v1_investigators_email_config_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Check Email Config
       tags:
       - investigators
   /api/v1/investigators/init-superadmin:
@@ -2970,7 +2990,7 @@ paths:
   /api/v1/investigators/{investigator_id}/dashboard:
     get:
       description: Get investigator self-service dashboard stats
-      operationId: get_investigator_dashboard_api_v1_investigators__investigator_id__dashboard_get
+      operationId: get_investigator_self_service_dashboard
       parameters:
       - in: path
         name: investigator_id
@@ -3021,7 +3041,7 @@ paths:
       - investigators
     patch:
       description: Update investigator availability status
-      operationId: update_investigator_status_api_v1_investigators__investigator_id__status_patch
+      operationId: update_investigator_self_service_status
       parameters:
       - in: path
         name: investigator_id
@@ -3084,6 +3104,63 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Broadcast Announcement
+      tags:
+      - messages
+  /api/v1/messages/history:
+    get:
+      description: 'Get communication history sent to investigators.
+
+        Includes direct messages and broadcast announcements already delivered to
+        investigators.'
+      operationId: get_message_history_api_v1_messages_history_get
+      parameters:
+      - in: query
+        name: investigator_id
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Investigator Id
+      - in: query
+        name: message_type
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message Type
+      - in: query
+        name: skip
+        required: false
+        schema:
+          default: 0
+          title: Skip
+          type: integer
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          title: Limit
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MessageResponse'
+                title: Response Get Message History Api V1 Messages History Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Message History
       tags:
       - messages
   /api/v1/messages/investigators/{investigator_id}/message:
@@ -3478,6 +3555,34 @@ paths:
       summary: Train Rl Agent
       tags:
       - rl-engine
+  /api/v1/system/health:
+    get:
+      operationId: system_health_api_v1_system_health_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response System Health Api V1 System Health Get
+                type: object
+          description: Successful Response
+      summary: System Health
+      tags:
+      - system-health
+  /api/v1/system/queue/flush:
+    post:
+      operationId: flush_queue_api_v1_system_queue_flush_post
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Flush Queue Api V1 System Queue Flush Post
+                type: object
+          description: Successful Response
+      summary: Flush Queue
+      tags:
+      - system-health
   /api/v1/transactions/:
     get:
       description: Get all transactions
@@ -4058,21 +4163,12 @@ paths:
     post:
       description: Add a wallet to the watchlist.
       operationId: add_to_watchlist_api_v1_watchlist__post
-      parameters:
-      - in: query
-        name: wallet_address
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchlistAddRequest'
         required: true
-        schema:
-          title: Wallet Address
-          type: string
-      - in: query
-        name: label
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Label
       responses:
         '200':
           content:

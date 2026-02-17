@@ -19,6 +19,10 @@ from app.api.v1.schemas import EvidenceResponse
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.core.audit_logging import emit_audit_log
+from app.core.sovereign_integrations import (
+    emit_core_event,
+    store_evidence_in_bucket,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -111,7 +115,13 @@ async def download_evidence(evidence_id: int, db: Session = Depends(get_db)):
             status_code=404, 
             detail="Evidence file not found on disk. The file may have been deleted or moved."
         )
-    
+    emit_core_event(
+        action="evidence.download",
+        evidence_id=evidence_item.evidence_id,
+        case_id=str(evidence_item.case_id) if evidence_item.case_id else None,
+        risk_score=0.0,
+        metadata={"source": "api", "evidence_db_id": evidence_item.id},
+    )
     return FileResponse(
         path=evidence_item.file_path,
         filename=evidence_item.title or f"evidence_{evidence_id}",
@@ -137,7 +147,13 @@ async def view_evidence(evidence_id: int, db: Session = Depends(get_db)):
             status_code=404, 
             detail="Evidence file not found on disk. The file may have been deleted or moved."
         )
-    
+    emit_core_event(
+        action="evidence.view",
+        evidence_id=evidence_item.evidence_id,
+        case_id=str(evidence_item.case_id) if evidence_item.case_id else None,
+        risk_score=0.0,
+        metadata={"source": "api", "evidence_db_id": evidence_item.id},
+    )
     # For viewable files, return with appropriate content type
     return FileResponse(
         path=evidence_item.file_path,
@@ -211,6 +227,15 @@ async def create_evidence(
         with open(file_path, "wb") as f:
             f.write(content)
 
+        # Attempt sovereign bucket store (graceful degradation to local storage).
+        store_evidence_in_bucket(
+            evidence_id=evidence_id,
+            sha256=file_hash,
+            filename=file.filename or safe_filename,
+            content=content,
+            content_type=file_type,
+        )
+
         # Enrich description with context from the form so it's visible later
         details_parts = []
         if description:
@@ -238,6 +263,24 @@ async def create_evidence(
         db.add(db_evidence)
         db.commit()
         db.refresh(db_evidence)
+        risk_score = {
+            "low": 0.25,
+            "medium": 0.5,
+            "high": 0.75,
+            "critical": 0.95,
+        }.get((risk_level or "").lower(), 0.0)
+        emit_core_event(
+            action="evidence.upload",
+            evidence_id=evidence_id,
+            case_id=str(db_evidence.case_id) if db_evidence.case_id else None,
+            risk_score=risk_score,
+            metadata={
+                "walletId": wallet_id,
+                "sha256": file_hash,
+                "fileSize": file_size,
+                "contentType": file_type,
+            },
+        )
         
         # Notify superadmin about new evidence upload
         try:
