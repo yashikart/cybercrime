@@ -402,6 +402,7 @@ class InvestigatorAccessRequest(Base):
     full_name = Column(String, nullable=False)
     email = Column(String, nullable=False, index=True)
     reason = Column(Text, nullable=True)
+    requested_password_hash = Column(String, nullable=True)
     status = Column(String, default="pending", index=True)  # pending, approved, rejected
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)

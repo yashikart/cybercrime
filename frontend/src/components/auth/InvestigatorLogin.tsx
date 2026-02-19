@@ -108,6 +108,7 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
           full_name: fullName,
           email: emailValue,
           reason: "Self-service request from investigator login portal",
+          requested_password: passwordValue,
         }),
       });
 

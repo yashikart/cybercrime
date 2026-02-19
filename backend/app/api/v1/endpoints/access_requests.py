@@ -18,6 +18,7 @@ class AccessRequestCreate(BaseModel):
     full_name: str
     email: EmailStr
     reason: Optional[str] = None
+    requested_password: str
 
 
 class AccessRequestResponse(BaseModel):
@@ -36,6 +37,12 @@ class AccessRequestResponse(BaseModel):
 class AccessRequestUpdate(BaseModel):
     status: str  # approved, rejected
     rejection_reason: Optional[str] = None
+    initial_password: Optional[str] = None
+
+
+class AdminSetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str
 
 
 @router.post("/request", response_model=AccessRequestResponse, status_code=status.HTTP_201_CREATED)
@@ -44,6 +51,13 @@ async def create_access_request(
     db: Session = Depends(get_db)
 ):
     """Submit a new investigator access request"""
+    requested_password = request.requested_password.strip()
+    if len(requested_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long"
+        )
+
     # Check if email already exists in users table
     existing_user = db.query(User).filter(User.email == request.email.lower().strip()).first()
     if existing_user:
@@ -68,6 +82,7 @@ async def create_access_request(
         full_name=request.full_name,
         email=request.email.lower().strip(),
         reason=request.reason,
+        requested_password_hash=get_password_hash(requested_password),
         status="pending"
     )
     db.add(db_request)
@@ -172,31 +187,85 @@ async def review_access_request(
     
     # If approved, create the investigator account
     if update.status == "approved":
+        chosen_password = (update.initial_password or "").strip()
+        if chosen_password and len(chosen_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="initial_password must be at least 8 characters long"
+            )
+
         existing_user = db.query(User).filter(User.email == access_request.email).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"User with email {access_request.email} already exists"
             )
-        # Generate a temporary password (investigator will need to reset it)
-        import secrets
-        temp_password = secrets.token_urlsafe(12)
-        
+
         new_user = User(
             email=access_request.email,
-            hashed_password=get_password_hash(temp_password),
+            hashed_password=(
+                get_password_hash(chosen_password)
+                if chosen_password
+                else access_request.requested_password_hash
+            ),
             full_name=access_request.full_name,
             role="investigator",
             is_active=True
         )
+        if not new_user.hashed_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No password available for approval. Set initial_password during approval."
+            )
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        
-        # Note: In production, you would send the temporary password via email
-        # For now, we'll just create the account
     
     db.commit()
     db.refresh(access_request)
     
     return access_request.to_dict()
+
+
+@router.post("/admin/set-password")
+async def admin_set_password(
+    payload: AdminSetPasswordRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """Set/reset investigator password (superadmin only)."""
+    current_user = getattr(http_request.state, "current_user", None)
+    if not current_user or getattr(current_user, "role", None) != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only superadmin can set investigator passwords"
+        )
+
+    new_password = payload.new_password.strip()
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="new_password must be at least 8 characters long"
+        )
+
+    user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    if user.role != "investigator":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset via this endpoint is only allowed for investigator accounts"
+        )
+
+    user.hashed_password = get_password_hash(new_password)
+    user.is_active = True
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Password updated for investigator {user.email}",
+        "email": user.email
+    }

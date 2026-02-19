@@ -268,7 +268,9 @@ function RequestAccessButton() {
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
-    reason: ""
+    reason: "",
+    requested_password: "",
+    confirm_password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle");
@@ -279,9 +281,19 @@ function RequestAccessButton() {
     e.stopPropagation();
 
     // Validate form data
-    if (!formData.full_name.trim() || !formData.email.trim()) {
+    if (!formData.full_name.trim() || !formData.email.trim() || !formData.requested_password.trim() || !formData.confirm_password.trim()) {
       setSubmitStatus("error");
       setErrorMessage("Please fill in all required fields.");
+      return;
+    }
+    if (formData.requested_password.trim().length < 8) {
+      setSubmitStatus("error");
+      setErrorMessage("Password must be at least 8 characters long.");
+      return;
+    }
+    if (formData.requested_password !== formData.confirm_password) {
+      setSubmitStatus("error");
+      setErrorMessage("Password and confirm password do not match.");
       return;
     }
 
@@ -301,6 +313,7 @@ function RequestAccessButton() {
           full_name: formData.full_name.trim(),
           email: formData.email.trim().toLowerCase(),
           reason: formData.reason.trim() || null,
+          requested_password: formData.requested_password,
         }),
       });
 
@@ -316,7 +329,7 @@ function RequestAccessButton() {
 
       if (response.ok) {
         setSubmitStatus("success");
-        setFormData({ full_name: "", email: "", reason: "" });
+        setFormData({ full_name: "", email: "", reason: "", requested_password: "", confirm_password: "" });
         console.log("Access request submitted successfully:", responseData);
 
         // Show success message for 3 seconds before closing
@@ -427,6 +440,32 @@ function RequestAccessButton() {
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     className="w-full bg-black/60 border border-emerald-500/40 text-gray-100 font-mono rounded-lg p-3 min-h-[100px] resize-none"
                     placeholder="Briefly explain why you need investigator access..."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="requested_password" className="text-gray-300 font-mono text-sm mb-2 block">
+                    Password
+                  </Label>
+                  <Input
+                    id="requested_password"
+                    type="password"
+                    value={formData.requested_password}
+                    onChange={(e) => setFormData({ ...formData, requested_password: e.target.value })}
+                    className="bg-black/60 border-emerald-500/40 text-gray-100 font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirm_password" className="text-gray-300 font-mono text-sm mb-2 block">
+                    Confirm Password
+                  </Label>
+                  <Input
+                    id="confirm_password"
+                    type="password"
+                    value={formData.confirm_password}
+                    onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
+                    className="bg-black/60 border-emerald-500/40 text-gray-100 font-mono"
+                    required
                   />
                 </div>
 

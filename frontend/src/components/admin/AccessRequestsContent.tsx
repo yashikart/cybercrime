@@ -25,6 +25,8 @@ export function AccessRequestsContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [selectedRequest, setSelectedRequest] = useState<AccessRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [initialPassword, setInitialPassword] = useState("");
+  const [confirmInitialPassword, setConfirmInitialPassword] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -86,11 +88,33 @@ export function AccessRequestsContent() {
   };
 
   const handleReview = async (requestId: number, status: "approved" | "rejected") => {
+    if (status === "approved") {
+      const password = initialPassword.trim();
+      const confirm = confirmInitialPassword.trim();
+      if (password || confirm) {
+        if (!password || !confirm) {
+          alert("Fill both initial password fields or leave both empty.");
+          return;
+        }
+        if (password.length < 8) {
+          alert("Initial password must be at least 8 characters.");
+          return;
+        }
+        if (password !== confirm) {
+          alert("Initial password and confirm password do not match.");
+          return;
+        }
+      }
+    }
+
     setReviewing(true);
     try {
       const body: any = { status };
       if (status === "rejected" && rejectionReason) {
         body.rejection_reason = rejectionReason;
+      }
+      if (status === "approved") {
+        body.initial_password = initialPassword.trim();
       }
 
       const response = await fetch(
@@ -107,6 +131,8 @@ export function AccessRequestsContent() {
         await fetchRequests();
         setSelectedRequest(null);
         setRejectionReason("");
+        setInitialPassword("");
+        setConfirmInitialPassword("");
         alert(status === "approved" ? "Request approved successfully!" : "Request rejected.");
       } else {
         const errorMessage =
@@ -335,11 +361,33 @@ export function AccessRequestsContent() {
               />
             </div>
 
+            <div className="mb-6">
+              <label className="text-gray-400 font-mono text-xs mb-2 block">
+                Initial Password (optional override)
+              </label>
+              <Input
+                type="password"
+                value={initialPassword}
+                onChange={(e) => setInitialPassword(e.target.value)}
+                className="bg-black/60 border border-emerald-500/40 text-gray-100 font-mono mb-2"
+                placeholder="Minimum 8 characters"
+              />
+              <Input
+                type="password"
+                value={confirmInitialPassword}
+                onChange={(e) => setConfirmInitialPassword(e.target.value)}
+                className="bg-black/60 border border-emerald-500/40 text-gray-100 font-mono"
+                placeholder="Confirm initial password"
+              />
+            </div>
+
             <div className="flex gap-3">
               <Button
                 onClick={() => {
                   setSelectedRequest(null);
                   setRejectionReason("");
+                  setInitialPassword("");
+                  setConfirmInitialPassword("");
                 }}
                 className="flex-1 bg-gray-800/60 border border-gray-700/40 text-gray-300 hover:bg-gray-700/60 font-mono"
               >

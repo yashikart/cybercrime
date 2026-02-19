@@ -356,6 +356,32 @@ def migrate_database():
                     message="Could not create investigator_access_requests table.",
                     details={"error": str(e)},
                 )
+        else:
+            existing_access_request_columns = [col["name"] for col in inspector.get_columns("investigator_access_requests")]
+            with engine.connect() as conn:
+                access_request_columns_to_add = [
+                    ("requested_password_hash", "VARCHAR"),
+                ]
+
+                for col_name, col_type in access_request_columns_to_add:
+                    if col_name not in existing_access_request_columns:
+                        try:
+                            sql_type = get_sql_type(col_type)
+                            conn.execute(text(f"ALTER TABLE investigator_access_requests ADD COLUMN {col_name} {sql_type}"))
+                            conn.commit()
+                            emit_audit_log(
+                                action="migration.access_requests.add_column",
+                                status="success",
+                                message=f"Added {col_name} column to investigator_access_requests table.",
+                            )
+                        except Exception as e:
+                            emit_audit_log(
+                                action="migration.access_requests.add_column",
+                                status="warning",
+                                message=f"Could not add {col_name} column to investigator_access_requests table.",
+                                details={"error": str(e)},
+                            )
+                            conn.rollback()
         
         # Check if wallets table exists and add freeze status columns
         if "wallets" in inspector.get_table_names():

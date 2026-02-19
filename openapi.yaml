@@ -9,6 +9,9 @@ components:
         full_name:
           title: Full Name
           type: string
+        requested_password:
+          title: Requested Password
+          type: string
         reason:
           anyOf:
           - type: string
@@ -17,6 +20,7 @@ components:
       required:
       - full_name
       - email
+      - requested_password
       title: AccessRequestCreate
       type: object
     AccessRequestResponse:
@@ -74,6 +78,11 @@ components:
       type: object
     AccessRequestUpdate:
       properties:
+        initial_password:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Initial Password
         rejection_reason:
           anyOf:
           - type: string
@@ -85,6 +94,20 @@ components:
       required:
       - status
       title: AccessRequestUpdate
+      type: object
+    AdminSetPasswordRequest:
+      properties:
+        email:
+          format: email
+          title: Email
+          type: string
+        new_password:
+          title: New Password
+          type: string
+      required:
+      - email
+      - new_password
+      title: AdminSetPasswordRequest
       type: object
     AuditLogResponse:
       properties:
@@ -1420,6 +1443,31 @@ paths:
               schema: {}
           description: Successful Response
       summary: Root
+  /api/v1/access-requests/admin/set-password:
+    post:
+      description: Set/reset investigator password (superadmin only).
+      operationId: admin_set_password_api_v1_access_requests_admin_set_password_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSetPasswordRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Admin Set Password
+      tags:
+      - access-requests
   /api/v1/access-requests/request:
     post:
       description: Submit a new investigator access request
