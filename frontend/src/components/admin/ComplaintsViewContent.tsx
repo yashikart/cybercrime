@@ -39,6 +39,18 @@ type InvestigatorDisplay = {
   secondary: string | null;
 };
 
+const looksLikeLegacyLocationText = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  const v = value.trim();
+  if (!v) return false;
+  if (v.includes("(") || v.includes(",")) return true;
+  return (
+    v.toLowerCase().includes(" pradesh") ||
+    v.toLowerCase().includes("nadu") ||
+    v.toLowerCase().includes("sikkim")
+  );
+};
+
 export function ComplaintsViewContent() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +154,8 @@ export function ComplaintsViewContent() {
   const getInvestigatorDisplay = (complaint: Complaint): InvestigatorDisplay => {
     const apiName = complaint.investigator_name?.trim() || null;
     const apiEmail = complaint.investigator_email?.trim() || null;
-    if (apiName) {
+    // Accept backend investigator_name only when it is tied to real identity signals.
+    if (apiName && (complaint.investigator_id !== null || Boolean(apiEmail))) {
       return {
         primary: apiName,
         secondary: apiEmail && apiEmail !== apiName ? apiEmail : null,
@@ -165,11 +178,24 @@ export function ComplaintsViewContent() {
       }
     }
 
-    // Legacy records may not carry investigator linkage; show officer designation instead.
+    // Legacy records may not carry investigator linkage.
     return {
-      primary: complaint.officer_designation?.trim() || "Investigator not linked",
+      primary: "Investigator not linked",
       secondary: "Legacy complaint record",
     };
+  };
+
+  const getLocationFallbackLabel = (complaint: Complaint): string | null => {
+    const hasStructuredLocation =
+      Boolean(complaint.investigator_location_city) ||
+      Boolean(complaint.investigator_location_country) ||
+      complaint.investigator_location_latitude !== null ||
+      complaint.investigator_location_longitude !== null ||
+      Boolean(complaint.investigator_location_ip);
+    if (hasStructuredLocation) return null;
+    if (complaint.investigator_id !== null) return null;
+    const raw = complaint.investigator_name?.trim() || null;
+    return looksLikeLegacyLocationText(raw) ? raw : null;
   };
 
   return (
@@ -334,18 +360,38 @@ export function ComplaintsViewContent() {
                       })()}
                     </td>
                     <td className="py-4 px-4">
-                      {complaint.investigator_location_city || complaint.investigator_location_country ? (
+                      {complaint.investigator_location_city ||
+                      complaint.investigator_location_country ||
+                      complaint.investigator_location_latitude !== null ||
+                      complaint.investigator_location_longitude !== null ||
+                      complaint.investigator_location_ip ||
+                      getLocationFallbackLabel(complaint) ? (
                         <div className="flex items-center gap-2">
                           <MapPin className="w-4 h-4 text-cyan-400" />
                           <div>
-                            <p className="text-gray-200 font-mono text-sm">
-                              {complaint.investigator_location_city || "Unknown City"}
-                              {complaint.investigator_location_country && `, ${complaint.investigator_location_country}`}
-                            </p>
-                            {complaint.investigator_location_latitude && complaint.investigator_location_longitude && (
+                            {(complaint.investigator_location_city || complaint.investigator_location_country) && (
+                              <p className="text-gray-200 font-mono text-sm">
+                                {complaint.investigator_location_city || "Unknown City"}
+                                {complaint.investigator_location_country && `, ${complaint.investigator_location_country}`}
+                              </p>
+                            )}
+                            {!complaint.investigator_location_city &&
+                              !complaint.investigator_location_country &&
+                              getLocationFallbackLabel(complaint) && (
+                              <p className="text-gray-200 font-mono text-sm">
+                                {getLocationFallbackLabel(complaint)}
+                              </p>
+                            )}
+                            {complaint.investigator_location_latitude !== null &&
+                              complaint.investigator_location_longitude !== null && (
                               <p className="text-gray-500 font-mono text-xs mt-1">
                                 {complaint.investigator_location_latitude.toFixed(4)}, {complaint.investigator_location_longitude.toFixed(4)}
                               </p>
+                            )}
+                            {!complaint.investigator_location_city &&
+                              !complaint.investigator_location_country &&
+                              getLocationFallbackLabel(complaint) && (
+                              <p className="text-gray-600 font-mono text-xs mt-1">Legacy location record</p>
                             )}
                             {complaint.investigator_location_ip && (
                               <p className="text-gray-600 font-mono text-xs mt-1">IP: {complaint.investigator_location_ip}</p>
