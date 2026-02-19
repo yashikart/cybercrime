@@ -88,14 +88,13 @@ export function AccessRequestsContent() {
   const handleReview = async (requestId: number, status: "approved" | "rejected") => {
     setReviewing(true);
     try {
-      const adminId = localStorage.getItem("admin_id");
       const body: any = { status };
       if (status === "rejected" && rejectionReason) {
         body.rejection_reason = rejectionReason;
       }
 
       const response = await fetch(
-        apiUrl(`access-requests/requests/${requestId}/review?reviewed_by=${adminId || ""}`),
+        apiUrl(`access-requests/requests/${requestId}/review`),
         {
           method: "PATCH",
           headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
