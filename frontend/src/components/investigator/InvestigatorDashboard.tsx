@@ -323,6 +323,7 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
           {activeSection === "ai-analysis" && <AIAnalysisSection />}
           {activeSection === "contact-police" && (
             <ContactPoliceSection
+              investigatorId={investigatorId}
               onUseWalletForEvidence={(walletId: string) => {
                 setEvidenceWalletFilter(walletId);
               }}
@@ -2058,8 +2059,10 @@ function AIAnalysisSection() {
 }
 
 function ContactPoliceSection({
+  investigatorId,
   onUseWalletForEvidence,
 }: {
+  investigatorId: number | null;
   onUseWalletForEvidence?: (walletId: string) => void;
 }) {
   const [step, setStep] = useState(1);
