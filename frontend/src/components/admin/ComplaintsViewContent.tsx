@@ -34,6 +34,11 @@ interface Investigator {
   full_name: string | null;
 }
 
+type InvestigatorDisplay = {
+  primary: string;
+  secondary: string | null;
+};
+
 export function ComplaintsViewContent() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +137,39 @@ export function ComplaintsViewContent() {
     } catch {
       return dateString;
     }
+  };
+
+  const getInvestigatorDisplay = (complaint: Complaint): InvestigatorDisplay => {
+    const apiName = complaint.investigator_name?.trim() || null;
+    const apiEmail = complaint.investigator_email?.trim() || null;
+    if (apiName) {
+      return {
+        primary: apiName,
+        secondary: apiEmail && apiEmail !== apiName ? apiEmail : null,
+      };
+    }
+
+    if (apiEmail) {
+      return { primary: apiEmail, secondary: null };
+    }
+
+    if (complaint.investigator_id) {
+      const inv = investigators.find((i) => i.id === complaint.investigator_id);
+      if (inv) {
+        const fullName = inv.full_name?.trim() || null;
+        const email = inv.email?.trim() || null;
+        return {
+          primary: fullName || email || "Investigator linked",
+          secondary: fullName && email && email !== fullName ? email : null,
+        };
+      }
+    }
+
+    // Legacy records may not carry investigator linkage; show officer designation instead.
+    return {
+      primary: complaint.officer_designation?.trim() || "Investigator not linked",
+      secondary: "Legacy complaint record",
+    };
   };
 
   return (
@@ -284,21 +322,12 @@ export function ComplaintsViewContent() {
                     </td>
                     <td className="py-4 px-4">
                       {(() => {
-                        // First try to use investigator_name/investigator_email from complaint data (from backend)
-                        // Backend returns investigator_name as full_name or email, and investigator_email separately
-                        let displayName = complaint.investigator_name || complaint.investigator_email;
-                        
-                        // If not available from complaint data, try to find from investigators list
-                        if (!displayName && complaint.investigator_id) {
-                          const inv = investigators.find((i) => i.id === complaint.investigator_id);
-                          displayName = inv?.full_name || inv?.email || null;
-                        }
-                        
+                        const display = getInvestigatorDisplay(complaint);
                         return (
                           <div>
-                            <p className="text-gray-200 font-mono text-sm">{displayName || "Unknown Investigator"}</p>
-                            {complaint.investigator_email && complaint.investigator_email !== displayName && (
-                              <p className="text-gray-500 font-mono text-xs mt-1">{complaint.investigator_email}</p>
+                            <p className="text-gray-200 font-mono text-sm">{display.primary}</p>
+                            {display.secondary && (
+                              <p className="text-gray-500 font-mono text-xs mt-1">{display.secondary}</p>
                             )}
                           </div>
                         );
