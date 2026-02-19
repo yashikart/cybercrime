@@ -9,10 +9,47 @@ from datetime import datetime
 import json
 
 from app.db.database import get_db
-from app.db.models import Complaint, User
+from app.db.models import Complaint, IncidentReport, User
 from app.api.v1.schemas import ComplaintCreate, ComplaintResponse
 
 router = APIRouter()
+
+def _enrich_complaint_payload(db: Session, complaint: Complaint) -> dict:
+    payload = complaint.to_dict()
+    if payload.get("investigator_id") and (payload.get("investigator_name") or payload.get("investigator_email")):
+        return payload
+
+    # Legacy fallback: infer investigator from related incident reports for the same wallet.
+    related_report = (
+        db.query(IncidentReport)
+        .filter(IncidentReport.wallet_address == complaint.wallet_address)
+        .filter(IncidentReport.investigator_id.isnot(None))
+        .order_by(IncidentReport.created_at.desc())
+        .first()
+    )
+    if not related_report or not related_report.investigator_id:
+        return payload
+
+    investigator = db.query(User).filter(User.id == related_report.investigator_id).first()
+    if not investigator:
+        return payload
+
+    payload["investigator_id"] = investigator.id
+    payload["investigator_name"] = investigator.full_name or investigator.email
+    payload["investigator_email"] = investigator.email
+
+    # Fill missing location metadata from investigator profile when absent in legacy complaint rows.
+    if not payload.get("investigator_location_city"):
+        payload["investigator_location_city"] = investigator.location_city
+    if not payload.get("investigator_location_country"):
+        payload["investigator_location_country"] = investigator.location_country
+    if payload.get("investigator_location_latitude") is None:
+        payload["investigator_location_latitude"] = investigator.location_latitude
+    if payload.get("investigator_location_longitude") is None:
+        payload["investigator_location_longitude"] = investigator.location_longitude
+    if not payload.get("investigator_location_ip"):
+        payload["investigator_location_ip"] = investigator.location_ip
+    return payload
 
 
 @router.get("/", response_model=List[ComplaintResponse])
@@ -34,7 +71,7 @@ async def get_complaints(
         .limit(limit)
         .all()
     )
-    return [c.to_dict() for c in complaints]
+    return [_enrich_complaint_payload(db, c) for c in complaints]
 
 
 @router.get("/{complaint_id}", response_model=ComplaintResponse)
@@ -43,7 +80,7 @@ async def get_complaint(complaint_id: int, db: Session = Depends(get_db)):
     complaint = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    return complaint.to_dict()
+    return _enrich_complaint_payload(db, complaint)
 
 
 @router.post("/", response_model=ComplaintResponse)
@@ -106,7 +143,11 @@ async def create_complaint(
     # Reload with investigator relationship
     db.refresh(db_complaint)
     complaint_with_investigator = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == db_complaint.id).first()
-    return complaint_with_investigator.to_dict() if complaint_with_investigator else db_complaint.to_dict()
+    return (
+        _enrich_complaint_payload(db, complaint_with_investigator)
+        if complaint_with_investigator
+        else _enrich_complaint_payload(db, db_complaint)
+    )
 
 
 @router.patch("/{complaint_id}/status", response_model=ComplaintResponse)
@@ -127,4 +168,8 @@ async def update_complaint_status(
     db.refresh(complaint)
     # Reload with investigator relationship
     complaint_with_investigator = db.query(Complaint).options(joinedload(Complaint.investigator)).filter(Complaint.id == complaint.id).first()
-    return complaint_with_investigator.to_dict() if complaint_with_investigator else complaint.to_dict()
+    return (
+        _enrich_complaint_payload(db, complaint_with_investigator)
+        if complaint_with_investigator
+        else _enrich_complaint_payload(db, complaint)
+    )

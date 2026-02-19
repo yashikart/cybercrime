@@ -155,7 +155,7 @@ export function ComplaintsViewContent() {
     const apiName = complaint.investigator_name?.trim() || null;
     const apiEmail = complaint.investigator_email?.trim() || null;
     // Accept backend investigator_name only when it is tied to real identity signals.
-    if (apiName && (complaint.investigator_id !== null || Boolean(apiEmail))) {
+    if (apiName && !looksLikeLegacyLocationText(apiName)) {
       return {
         primary: apiName,
         secondary: apiEmail && apiEmail !== apiName ? apiEmail : null,
