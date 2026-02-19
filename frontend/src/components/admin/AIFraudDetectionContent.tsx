@@ -68,6 +68,14 @@ interface RLPerformance {
   };
 }
 
+interface CompareMetrics {
+  sample_size: number;
+  ml_evaluated: number;
+  rl_evaluated: number;
+  ml_accuracy: number;
+  rl_accuracy: number;
+}
+
 export function AIFraudDetectionContent() {
   const [activeTab, setActiveTab] = useState<"ml" | "rl" | "compare">("ml");
   
@@ -94,6 +102,9 @@ export function AIFraudDetectionContent() {
   const [rlTraining, setRlTraining] = useState(false);
   const [trainLimit, setTrainLimit] = useState(1000);
   const [trainEpochs, setTrainEpochs] = useState(1);
+  const [compareMetrics, setCompareMetrics] = useState<CompareMetrics | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   // Fetch ML Data
   useEffect(() => {
@@ -117,13 +128,35 @@ export function AIFraudDetectionContent() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    if (activeTab === "compare") {
+      runLiveComparison();
+    }
+  }, [activeTab]);
+
+  const extractApiError = (payload: any): string => {
+    if (!payload || typeof payload !== "object") return "Unknown error";
+    return payload.error?.message || payload.detail || payload.message || "Unknown error";
+  };
+
   const fetchMLModelStatus = async () => {
     try {
       const response = await fetch(apiUrl("fraud-predictions/model/status"), { headers: getAuthHeaders() });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMlModelStatus({
+          available: false,
+          message: extractApiError(data),
+        });
+        return;
+      }
       setMlModelStatus(data);
     } catch (error) {
       console.error("Error fetching ML model status:", error);
+      setMlModelStatus({
+        available: false,
+        message: "Unable to fetch ML model status",
+      });
     }
   };
 
@@ -131,10 +164,15 @@ export function AIFraudDetectionContent() {
     setMlLoading(true);
     try {
       const response = await fetch(apiUrl("fraud-transactions/?limit=100"), { headers: getAuthHeaders() });
-      const data = await response.json();
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        setTransactions([]);
+        return;
+      }
       setTransactions(data);
     } catch (error) {
       console.error("Error fetching transactions:", error);
+      setTransactions([]);
     } finally {
       setMlLoading(false);
     }
@@ -143,8 +181,15 @@ export function AIFraudDetectionContent() {
   const fetchStats = async () => {
     try {
       const response = await fetch(apiUrl("fraud-transactions/stats"), { headers: getAuthHeaders() });
-      const data = await response.json();
-      setStats(data);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data) return;
+      setStats({
+        total: Number(data.total || 0),
+        fraud: Number(data.fraud || 0),
+        normal: Number(data.normal || 0),
+        fraud_percentage: Number(data.fraud_percentage || 0),
+        by_type: (data.by_type || {}) as Record<string, number>,
+      });
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
@@ -171,6 +216,64 @@ export function AIFraudDetectionContent() {
       }
     } catch (err) {
       console.error("Error fetching RL performance:", err);
+    }
+  };
+
+  const runLiveComparison = async () => {
+    setCompareLoading(true);
+    setCompareError(null);
+    try {
+      const txRes = await fetch(apiUrl("fraud-transactions/?limit=30"), { headers: getAuthHeaders() });
+      const txData = await txRes.json().catch(() => []);
+      if (!txRes.ok || !Array.isArray(txData) || txData.length === 0) {
+        setCompareMetrics(null);
+        setCompareError("No transactions available for comparison");
+        return;
+      }
+
+      const sample = txData.slice(0, 20) as FraudTransaction[];
+      let mlCorrect = 0;
+      let rlCorrect = 0;
+      let mlEvaluated = 0;
+      let rlEvaluated = 0;
+
+      for (const tx of sample) {
+        try {
+          const mlRes = await fetch(apiUrl(`fraud-predictions/predict/${tx.id}`), { headers: getAuthHeaders() });
+          if (mlRes.ok) {
+            const mlData = await mlRes.json();
+            mlEvaluated += 1;
+            if (mlData?.match) mlCorrect += 1;
+          }
+        } catch {
+          // ignore one-off compare failures
+        }
+
+        try {
+          const rlRes = await fetch(apiUrl(`rl-engine/predict/${tx.id}`), { headers: getAuthHeaders() });
+          if (rlRes.ok) {
+            const rlData = await rlRes.json();
+            rlEvaluated += 1;
+            if (rlData?.match) rlCorrect += 1;
+          }
+        } catch {
+          // ignore one-off compare failures
+        }
+      }
+
+      setCompareMetrics({
+        sample_size: sample.length,
+        ml_evaluated: mlEvaluated,
+        rl_evaluated: rlEvaluated,
+        ml_accuracy: mlEvaluated > 0 ? (mlCorrect / mlEvaluated) * 100 : 0,
+        rl_accuracy: rlEvaluated > 0 ? (rlCorrect / rlEvaluated) * 100 : 0,
+      });
+    } catch (error) {
+      console.error("Error running live model comparison:", error);
+      setCompareMetrics(null);
+      setCompareError("Unable to run live model comparison");
+    } finally {
+      setCompareLoading(false);
     }
   };
 
@@ -329,7 +432,7 @@ export function AIFraudDetectionContent() {
                 )}
                 <span className={`font-mono text-sm ${mlModelStatus.available ? "text-green-400" : "text-red-400"}`}>
                   {mlModelStatus.available 
-                    ? `ML Model Ready (${mlModelStatus.model_type || "Random Forest"})`
+                    ? `ML Model Ready (${mlModelStatus.model_type || "Unknown"})`
                     : mlModelStatus.message || "Model not available"
                   }
                 </span>
@@ -651,10 +754,51 @@ export function AIFraudDetectionContent() {
       {/* Compare Tab */}
       {activeTab === "compare" && (
         <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-emerald-500/20 rounded-lg p-6">
-          <h3 className="text-emerald-400 font-mono mb-4">Model Comparison</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-emerald-400 font-mono">Live Model Comparison</h3>
+            <Button
+              onClick={runLiveComparison}
+              disabled={compareLoading}
+              className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30"
+            >
+              {compareLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              Re-run
+            </Button>
+          </div>
+          {compareError && (
+            <div className="mb-4 p-3 rounded border border-red-500/30 bg-red-500/10 text-red-300 font-mono text-xs">
+              {compareError}
+            </div>
+          )}
+          {compareMetrics && (
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="p-3 bg-black/40 border border-emerald-500/20 rounded">
+                <p className="text-gray-500 font-mono text-xs">Sample Size</p>
+                <p className="text-emerald-400 font-mono text-lg">{compareMetrics.sample_size}</p>
+              </div>
+              <div className="p-3 bg-black/40 border border-purple-500/20 rounded">
+                <p className="text-gray-500 font-mono text-xs">ML Accuracy</p>
+                <p className="text-purple-400 font-mono text-lg">{compareMetrics.ml_accuracy.toFixed(2)}%</p>
+              </div>
+              <div className="p-3 bg-black/40 border border-cyan-500/20 rounded">
+                <p className="text-gray-500 font-mono text-xs">RL Accuracy</p>
+                <p className="text-cyan-400 font-mono text-lg">{compareMetrics.rl_accuracy.toFixed(2)}%</p>
+              </div>
+              <div className="p-3 bg-black/40 border border-amber-500/20 rounded">
+                <p className="text-gray-500 font-mono text-xs">Winner</p>
+                <p className="text-amber-300 font-mono text-lg">
+                  {compareMetrics.ml_accuracy === compareMetrics.rl_accuracy
+                    ? "Tie"
+                    : compareMetrics.ml_accuracy > compareMetrics.rl_accuracy
+                      ? "ML"
+                      : "RL"}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-              <h4 className="text-purple-400 font-mono mb-3">ML Model (Random Forest)</h4>
+              <h4 className="text-purple-400 font-mono mb-3">ML Model ({mlModelStatus?.model_type || "Unknown"})</h4>
               {mlModelStatus?.available ? (
                 <div className="space-y-2 text-sm font-mono">
                   <div className="flex justify-between">
