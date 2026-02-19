@@ -367,7 +367,11 @@ export function AIFraudDetectionContent() {
           </div>
           <Button
             onClick={() => {
-              if (activeTab === "ml" || activeTab === "compare") fetchTransactions();
+              if (activeTab === "ml" || activeTab === "compare") {
+                fetchMLModelStatus();
+                fetchStats();
+                fetchTransactions();
+              }
               if (activeTab === "rl" || activeTab === "compare") {
                 fetchRLStats();
                 fetchRLPerformance();
@@ -486,128 +490,144 @@ export function AIFraudDetectionContent() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/20 rounded-lg p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-900/50 border-gray-700/30 text-gray-300"
-                />
+          {stats.total === 0 ? (
+            <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-amber-500/30 rounded-lg p-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5" />
+                <div>
+                  <p className="text-amber-300 font-mono text-sm">No fraud transaction dataset connected.</p>
+                  <p className="text-gray-500 font-mono text-xs mt-1">
+                    Model artifact is loaded, but `fraud_transactions` currently has 0 rows. Import/seed transaction data to enable predictions.
+                  </p>
+                </div>
               </div>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-4 py-2 bg-gray-900/50 border border-gray-700/30 rounded-lg text-gray-300 font-mono text-sm"
-              >
-                <option value="all">All Types</option>
-                <option value="CASH_IN">CASH_IN</option>
-                <option value="CASH_OUT">CASH_OUT</option>
-                <option value="DEBIT">DEBIT</option>
-                <option value="PAYMENT">PAYMENT</option>
-                <option value="TRANSFER">TRANSFER</option>
-              </select>
-              <select
-                value={filterFraud}
-                onChange={(e) => setFilterFraud(e.target.value)}
-                className="px-4 py-2 bg-gray-900/50 border border-gray-700/30 rounded-lg text-gray-300 font-mono text-sm"
-              >
-                <option value="all">All</option>
-                <option value="fraud">Fraud Only</option>
-                <option value="normal">Normal Only</option>
-              </select>
-              <Button
-                onClick={() => {
-                  filteredTransactions.forEach(tx => predictML(tx.id));
-                }}
-                disabled={mlLoading || !mlModelStatus?.available}
-                className="bg-purple-500/20 border border-purple-500/40 text-purple-400 hover:bg-purple-500/30"
-              >
-                <Brain className="w-4 h-4 mr-2" />
-                Predict All
-              </Button>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Filters */}
+              <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/20 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 bg-gray-900/50 border-gray-700/30 text-gray-300"
+                    />
+                  </div>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="px-4 py-2 bg-gray-900/50 border border-gray-700/30 rounded-lg text-gray-300 font-mono text-sm"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="CASH_IN">CASH_IN</option>
+                    <option value="CASH_OUT">CASH_OUT</option>
+                    <option value="DEBIT">DEBIT</option>
+                    <option value="PAYMENT">PAYMENT</option>
+                    <option value="TRANSFER">TRANSFER</option>
+                  </select>
+                  <select
+                    value={filterFraud}
+                    onChange={(e) => setFilterFraud(e.target.value)}
+                    className="px-4 py-2 bg-gray-900/50 border border-gray-700/30 rounded-lg text-gray-300 font-mono text-sm"
+                  >
+                    <option value="all">All</option>
+                    <option value="fraud">Fraud Only</option>
+                    <option value="normal">Normal Only</option>
+                  </select>
+                  <Button
+                    onClick={() => {
+                      filteredTransactions.forEach(tx => predictML(tx.id));
+                    }}
+                    disabled={mlLoading || !mlModelStatus?.available || filteredTransactions.length === 0}
+                    className="bg-purple-500/20 border border-purple-500/40 text-purple-400 hover:bg-purple-500/30"
+                  >
+                    <Brain className="w-4 h-4 mr-2" />
+                    Predict All
+                  </Button>
+                </div>
+              </div>
 
-          {/* Transactions Table */}
-          <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/20 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-purple-950/30 to-pink-950/30 border-b border-purple-500/20">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Amount</th>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Actual</th>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">ML Prediction</th>
-                    <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-purple-500/10">
-                  {filteredTransactions.slice(0, 50).map((tx) => {
-                    const prediction = mlPredictions.get(tx.id);
-                    return (
-                      <tr
-                        key={tx.id}
-                        className="hover:bg-purple-500/5 transition-colors cursor-pointer"
-                        onClick={() => setSelectedTransaction(tx)}
-                      >
-                        <td className="px-4 py-3 text-sm font-mono text-gray-300">{tx.id}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-300">{tx.type}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-300">${tx.amount.toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-mono ${getRiskBg(tx.isFraud)} ${getRiskColor(tx.isFraud)}`}>
-                            {tx.isFraud === 1 ? "FRAUD" : "NORMAL"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {prediction ? (
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 rounded text-xs font-mono ${getRiskBg(prediction.prediction.is_fraud)} ${getRiskColor(prediction.prediction.is_fraud)}`}>
-                                {prediction.prediction.prediction}
-                              </span>
-                              {prediction.match ? (
-                                <CheckCircle className="w-3 h-3 text-green-400" />
-                              ) : (
-                                <XCircle className="w-3 h-3 text-red-400" />
-                              )}
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                predictML(tx.id);
-                              }}
-                              disabled={!mlModelStatus?.available}
-                              className="bg-purple-500/20 border border-purple-500/40 text-purple-400 hover:bg-purple-500/30 text-xs"
-                            >
-                              Predict
-                            </Button>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedTransaction(tx);
-                            }}
-                            className="bg-gray-800/50 border border-gray-700/30 text-gray-300 hover:bg-gray-700/50"
-                          >
-                            <Eye className="w-3 h-3" />
-                          </Button>
-                        </td>
+              {/* Transactions Table */}
+              <div className="bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-purple-500/20 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gradient-to-r from-purple-950/30 to-pink-950/30 border-b border-purple-500/20">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">ID</th>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Actual</th>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">ML Prediction</th>
+                        <th className="px-4 py-3 text-left text-xs font-mono text-purple-400">Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-purple-500/10">
+                      {filteredTransactions.slice(0, 50).map((tx) => {
+                        const prediction = mlPredictions.get(tx.id);
+                        return (
+                          <tr
+                            key={tx.id}
+                            className="hover:bg-purple-500/5 transition-colors cursor-pointer"
+                            onClick={() => setSelectedTransaction(tx)}
+                          >
+                            <td className="px-4 py-3 text-sm font-mono text-gray-300">{tx.id}</td>
+                            <td className="px-4 py-3 text-sm font-mono text-gray-300">{tx.type}</td>
+                            <td className="px-4 py-3 text-sm font-mono text-gray-300">${tx.amount.toFixed(2)}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded text-xs font-mono ${getRiskBg(tx.isFraud)} ${getRiskColor(tx.isFraud)}`}>
+                                {tx.isFraud === 1 ? "FRAUD" : "NORMAL"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {prediction ? (
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-1 rounded text-xs font-mono ${getRiskBg(prediction.prediction.is_fraud)} ${getRiskColor(prediction.prediction.is_fraud)}`}>
+                                    {prediction.prediction.prediction}
+                                  </span>
+                                  {prediction.match ? (
+                                    <CheckCircle className="w-3 h-3 text-green-400" />
+                                  ) : (
+                                    <XCircle className="w-3 h-3 text-red-400" />
+                                  )}
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    predictML(tx.id);
+                                  }}
+                                  disabled={!mlModelStatus?.available}
+                                  className="bg-purple-500/20 border border-purple-500/40 text-purple-400 hover:bg-purple-500/30 text-xs"
+                                >
+                                  Predict
+                                </Button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Button
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTransaction(tx);
+                                }}
+                                className="bg-gray-800/50 border border-gray-700/30 text-gray-300 hover:bg-gray-700/50"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
