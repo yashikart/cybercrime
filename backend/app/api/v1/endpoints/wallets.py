@@ -4,13 +4,13 @@ Wallet endpoints
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import inspect, or_
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 import json
 
-from app.db.database import get_db
+from app.db.database import engine, get_db
 from app.db.models import Wallet, Complaint, IncidentReport, Evidence, User, FraudTransaction
 from app.api.v1.schemas import WalletResponse, WalletCreate
 
@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 def _freeze_fields_available() -> bool:
-    """Check whether wallet freeze/unfreeze fields exist on the SQLAlchemy model."""
+    """Check whether wallet freeze/unfreeze fields exist on both model and DB schema."""
     required_fields = (
         "is_frozen",
         "frozen_by",
@@ -28,7 +28,15 @@ def _freeze_fields_available() -> bool:
         "unfreeze_reason",
         "unfrozen_at",
     )
-    return all(hasattr(Wallet, field) for field in required_fields)
+    model_ok = all(hasattr(Wallet, field) for field in required_fields)
+    if not model_ok:
+        return False
+
+    try:
+        existing_columns = {col["name"] for col in inspect(engine).get_columns("wallets")}
+    except Exception:
+        return False
+    return all(field in existing_columns for field in required_fields)
 
 
 def _ensure_freeze_fields_or_503() -> None:

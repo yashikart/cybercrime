@@ -67,6 +67,14 @@ class Wallet(Base):
     balance = Column(String)
     risk_level = Column(String, default="low")  # low, medium, high, critical
     anchor_status = Column(String, default="pending")  # pending, anchored, verified
+    # Freeze governance metadata (added for enforcement workflows)
+    is_frozen = Column(Boolean, default=False)
+    frozen_by = Column(String, nullable=True)
+    freeze_reason = Column(Text, nullable=True)
+    frozen_at = Column(DateTime, nullable=True)
+    unfrozen_by = Column(String, nullable=True)
+    unfreeze_reason = Column(Text, nullable=True)
+    unfrozen_at = Column(DateTime, nullable=True)
     last_activity = Column(DateTime)
     case_id = Column(Integer, ForeignKey("cases.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
