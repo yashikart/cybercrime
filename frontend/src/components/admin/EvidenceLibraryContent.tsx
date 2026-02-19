@@ -64,10 +64,11 @@ export function EvidenceLibraryContent() {
         // Fetch all investigators to map IDs to names
         let investigatorsMap = new Map<number, { name: string; email: string }>();
         try {
-          const investigatorsResponse = await fetch(apiUrl("investigators/"), { headers: getAuthHeaders() });
+          const investigatorsResponse = await fetch(apiUrl("investigators/investigators"), { headers: getAuthHeaders() });
           if (investigatorsResponse.ok) {
             const investigatorsData = await investigatorsResponse.json();
-            investigatorsData.forEach((inv: any) => {
+            const investigators = investigatorsData.investigators || [];
+            investigators.forEach((inv: any) => {
               investigatorsMap.set(inv.id, {
                 name: inv.full_name || inv.email?.split("@")[0] || "Unknown",
                 email: inv.email || "Unknown",

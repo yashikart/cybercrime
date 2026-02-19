@@ -252,6 +252,8 @@ class ComplaintResponse(BaseModel):
     id: int
     wallet_address: str
     investigator_id: Optional[int] = None
+    investigator_name: Optional[str] = None
+    investigator_email: Optional[str] = None
     officer_designation: str
     officer_address: Optional[str] = None
     officer_email: Optional[List[str]] = None

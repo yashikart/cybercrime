@@ -2,14 +2,14 @@
 Complaints endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
 import json
 
 from app.db.database import get_db
-from app.db.models import Complaint
+from app.db.models import Complaint, User
 from app.api.v1.schemas import ComplaintCreate, ComplaintResponse
 
 router = APIRouter()
@@ -47,11 +47,44 @@ async def get_complaint(complaint_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=ComplaintResponse)
-async def create_complaint(complaint: ComplaintCreate, db: Session = Depends(get_db)):
+async def create_complaint(
+    complaint: ComplaintCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     """Create a new complaint"""
+    current_user = getattr(request.state, "current_user", None)
+    effective_investigator_id = complaint.investigator_id
+
+    # Prefer authenticated investigator identity over client-provided values.
+    if current_user and getattr(current_user, "id", None):
+        effective_investigator_id = current_user.id
+
+    investigator_location_city = complaint.investigator_location_city
+    investigator_location_country = complaint.investigator_location_country
+    investigator_location_latitude = complaint.investigator_location_latitude
+    investigator_location_longitude = complaint.investigator_location_longitude
+    investigator_location_ip = complaint.investigator_location_ip
+
+    # Fallback to investigator profile location when request-side geo detection is unavailable.
+    if effective_investigator_id and (
+        not investigator_location_city
+        and not investigator_location_country
+        and investigator_location_latitude is None
+        and investigator_location_longitude is None
+        and not investigator_location_ip
+    ):
+        investigator = db.query(User).filter(User.id == effective_investigator_id).first()
+        if investigator:
+            investigator_location_city = investigator.location_city
+            investigator_location_country = investigator.location_country
+            investigator_location_latitude = investigator.location_latitude
+            investigator_location_longitude = investigator.location_longitude
+            investigator_location_ip = investigator.location_ip
+
     db_complaint = Complaint(
         wallet_address=complaint.wallet_address,
-        investigator_id=complaint.investigator_id,
+        investigator_id=effective_investigator_id,
         officer_designation=complaint.officer_designation,
         officer_address=complaint.officer_address,
         officer_email=json.dumps(complaint.officer_email or []),
@@ -60,11 +93,11 @@ async def create_complaint(complaint: ComplaintCreate, db: Session = Depends(get
         incident_description=complaint.incident_description,
         internal_notes=complaint.internal_notes,
         evidence_ids=json.dumps(complaint.evidence_ids or []),
-        investigator_location_city=complaint.investigator_location_city,
-        investigator_location_country=complaint.investigator_location_country,
-        investigator_location_latitude=complaint.investigator_location_latitude,
-        investigator_location_longitude=complaint.investigator_location_longitude,
-        investigator_location_ip=complaint.investigator_location_ip,
+        investigator_location_city=investigator_location_city,
+        investigator_location_country=investigator_location_country,
+        investigator_location_latitude=investigator_location_latitude,
+        investigator_location_longitude=investigator_location_longitude,
+        investigator_location_ip=investigator_location_ip,
         status="submitted",
     )
     db.add(db_complaint)
