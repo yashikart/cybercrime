@@ -2619,21 +2619,55 @@ function ContactPoliceSection({
                   };
 
                   try {
+                    // Best-effort browser geolocation first (if user allows permission).
+                    if (navigator.geolocation) {
+                      await new Promise<void>((resolve) => {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            locationData.lat = position.coords.latitude;
+                            locationData.lng = position.coords.longitude;
+                            resolve();
+                          },
+                          () => resolve(),
+                          { timeout: 5000, maximumAge: 60000 }
+                        );
+                      });
+                    }
+
                     // Get IP address
                     const ipRes = await fetch("https://api.ipify.org?format=json");
                     if (ipRes.ok) {
                       const ipData = await ipRes.json();
                       locationData.ip = ipData.ip;
 
-                      // Get location from IP (using HTTPS to avoid mixed content errors)
-                      const locationRes = await fetch(`https://ip-api.com/json/${locationData.ip}`);
-                      if (locationRes.ok) {
-                        const locData = await locationRes.json();
-                        if (locData.status === "success") {
-                          locationData.city = locData.city || null;
-                          locationData.country = locData.country || null;
-                          locationData.lat = locData.lat || null;
-                          locationData.lng = locData.lon || null;
+                      // Primary provider (HTTPS-safe): ipapi.co
+                      let locationResolved = false;
+                      const ipApiCoRes = await fetch(`https://ipapi.co/${locationData.ip}/json/`);
+                      if (ipApiCoRes.ok) {
+                        const ipApiCoData = await ipApiCoRes.json();
+                        locationData.city = ipApiCoData.city || locationData.city;
+                        locationData.country = ipApiCoData.country_name || locationData.country;
+                        locationData.lat = locationData.lat ?? ipApiCoData.latitude ?? null;
+                        locationData.lng = locationData.lng ?? ipApiCoData.longitude ?? null;
+                        locationResolved = Boolean(
+                          locationData.city ||
+                          locationData.country ||
+                          locationData.lat !== null ||
+                          locationData.lng !== null
+                        );
+                      }
+
+                      // Fallback provider: ipwho.is
+                      if (!locationResolved) {
+                        const ipWhoRes = await fetch(`https://ipwho.is/${locationData.ip}`);
+                        if (ipWhoRes.ok) {
+                          const ipWhoData = await ipWhoRes.json();
+                          if (ipWhoData.success !== false) {
+                            locationData.city = ipWhoData.city || locationData.city;
+                            locationData.country = ipWhoData.country || locationData.country;
+                            locationData.lat = locationData.lat ?? ipWhoData.latitude ?? null;
+                            locationData.lng = locationData.lng ?? ipWhoData.longitude ?? null;
+                          }
                         }
                       }
                     }
@@ -2655,6 +2689,7 @@ function ContactPoliceSection({
                     headers: complaintHeaders,
                     body: JSON.stringify({
                       wallet_address: walletId,
+                      investigator_id: investigatorId,
                       officer_designation: selectedStation["Officer/Designation"],
                       officer_address: selectedStation["Address"] || null,
                       officer_email: selectedStation["Email"] || [],
