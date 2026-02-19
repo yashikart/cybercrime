@@ -49,6 +49,16 @@ interface UnfrozenWallet {
   unfrozen_at: string | null;
 }
 
+const extractApiErrorMessage = (errorData: any, fallback = "Unknown error") => {
+  if (!errorData || typeof errorData !== "object") return fallback;
+  return (
+    errorData.detail ||
+    errorData.message ||
+    errorData.error?.message ||
+    fallback
+  );
+};
+
 export function EscalationsContent() {
   const [activeTab, setActiveTab] = useState<"search" | "frozen" | "unfrozen">("search");
   const [searchWallet, setSearchWallet] = useState("");
@@ -115,7 +125,7 @@ export function EscalationsContent() {
         setWalletResult(data);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to search wallet: ${errorData.detail || "Unknown error"}`);
+        alert(`Failed to search wallet: ${extractApiErrorMessage(errorData)}`);
       }
     } catch (error) {
       console.error("Error searching wallet:", error);
@@ -155,7 +165,7 @@ export function EscalationsContent() {
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to freeze wallet: ${errorData.detail || "Unknown error"}`);
+        alert(`Failed to freeze wallet: ${extractApiErrorMessage(errorData)}`);
       }
     } catch (error) {
       console.error("Error freezing wallet:", error);
@@ -192,7 +202,7 @@ export function EscalationsContent() {
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to unfreeze wallet: ${errorData.detail || "Unknown error"}`);
+        alert(`Failed to unfreeze wallet: ${extractApiErrorMessage(errorData)}`);
       }
     } catch (error) {
       console.error("Error unfreezing wallet:", error);
