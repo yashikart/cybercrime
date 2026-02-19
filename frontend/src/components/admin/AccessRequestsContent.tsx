@@ -26,6 +26,7 @@ export function AccessRequestsContent() {
   const [selectedRequest, setSelectedRequest] = useState<AccessRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -38,14 +39,25 @@ export function AccessRequestsContent() {
   }, [requests, searchTerm, statusFilter]);
 
   const fetchRequests = async () => {
+    setLoadError(null);
     try {
       const response = await fetch(apiUrl("access-requests/requests"), { headers: getAuthHeaders() });
+      const data = await response.json().catch(() => ([]));
       if (response.ok) {
-        const data = await response.json();
         setRequests(data);
+      } else {
+        const message =
+          data?.error?.message ||
+          data?.detail ||
+          data?.message ||
+          `Failed to load access requests (${response.status})`;
+        setLoadError(message);
+        setRequests([]);
       }
     } catch (error) {
       console.error("Error fetching requests:", error);
+      setLoadError("Network error while loading access requests.");
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -86,19 +98,24 @@ export function AccessRequestsContent() {
         apiUrl(`access-requests/requests/${requestId}/review?reviewed_by=${adminId || ""}`),
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
       );
 
+      const responseData = await response.json().catch(() => ({}));
       if (response.ok) {
         await fetchRequests();
         setSelectedRequest(null);
         setRejectionReason("");
         alert(status === "approved" ? "Request approved successfully!" : "Request rejected.");
       } else {
-        const error = await response.json();
-        alert(`Error: ${error.detail || "Failed to review request"}`);
+        const errorMessage =
+          responseData?.error?.message ||
+          responseData?.detail ||
+          responseData?.message ||
+          "Failed to review request";
+        alert(`Error: ${errorMessage}`);
       }
     } catch (error) {
       alert("Network error. Please try again.");
@@ -207,6 +224,14 @@ export function AccessRequestsContent() {
           </Button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+          <p className="text-red-400 font-mono text-xs">
+            {loadError}
+          </p>
+        </div>
+      )}
 
       {/* Requests Table */}
       {loading ? (
