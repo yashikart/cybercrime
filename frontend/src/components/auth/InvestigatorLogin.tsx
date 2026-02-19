@@ -25,6 +25,8 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
   const [createConfirmPassword, setCreateConfirmPassword] = useState("");
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createResult, setCreateResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     const glitchInterval = setInterval(() => {
@@ -78,10 +80,64 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
     }
   };
 
-  const handleCreateAccountSubmit = (e: React.FormEvent) => {
+  const handleCreateAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Create account attempted with:", { createName, createEmail, createPassword, createConfirmPassword });
-    setShowCreateAccount(false);
+    setCreateResult(null);
+
+    const fullName = createName.trim();
+    const emailValue = createEmail.trim().toLowerCase();
+    const passwordValue = createPassword.trim();
+    const confirmPasswordValue = createConfirmPassword.trim();
+
+    if (!fullName || !emailValue || !passwordValue || !confirmPasswordValue) {
+      setCreateResult({ success: false, message: "Please fill all required fields." });
+      return;
+    }
+
+    if (passwordValue !== confirmPasswordValue) {
+      setCreateResult({ success: false, message: "Passwords do not match." });
+      return;
+    }
+
+    setCreateSubmitting(true);
+    try {
+      const response = await fetch(apiUrl("access-requests/request"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: fullName,
+          email: emailValue,
+          reason: "Self-service request from investigator login portal",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorMessage =
+          data?.error?.message ||
+          data?.detail ||
+          data?.message ||
+          `Failed to submit request (${response.status})`;
+        setCreateResult({ success: false, message: errorMessage });
+        return;
+      }
+
+      setCreateResult({
+        success: true,
+        message: "Access request submitted successfully. Please wait for admin approval.",
+      });
+      setCreateName("");
+      setCreateEmail("");
+      setCreatePassword("");
+      setCreateConfirmPassword("");
+    } catch (error) {
+      setCreateResult({
+        success: false,
+        message: "Network error while submitting request. Please try again.",
+      });
+    } finally {
+      setCreateSubmitting(false);
+    }
   };
 
   return (
@@ -373,7 +429,10 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowCreateAccount(false)}
+                    onClick={() => {
+                      setShowCreateAccount(false);
+                      setCreateResult(null);
+                    }}
                     className="p-2 text-gray-500 hover:text-emerald-400 transition hover:bg-emerald-500/10 rounded"
                   >
                     <ArrowLeft className="w-5 h-5" />
@@ -485,22 +544,38 @@ export function InvestigatorLogin({ setCurrentPage }: InvestigatorLoginProps) {
                     </div>
                   </div>
 
+                  {createResult && (
+                    <div
+                      className={`p-3 rounded-lg border font-mono text-xs ${
+                        createResult.success
+                          ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
+                          : "bg-red-950/20 border-red-500/30 text-red-300"
+                      }`}
+                    >
+                      {createResult.message}
+                    </div>
+                  )}
+
                   <div className="flex gap-3 pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowCreateAccount(false)}
+                      onClick={() => {
+                        setShowCreateAccount(false);
+                        setCreateResult(null);
+                      }}
                       className="flex-1 px-6 py-3 bg-gray-800/50 border border-gray-700 hover:border-gray-600 text-gray-400 hover:text-gray-300 rounded-lg transition-all font-mono text-sm"
                     >
                       CANCEL
                     </button>
                     <Button
                       type="submit"
+                      disabled={createSubmitting}
                       className="flex-1 relative overflow-hidden bg-gradient-to-r from-emerald-600 via-cyan-600 to-emerald-600 hover:from-emerald-500 hover:via-cyan-500 hover:to-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all duration-300 h-12 group/btn border border-emerald-400/30"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
                       <span className="flex items-center justify-center gap-2 font-mono text-sm">
                         <Shield className="w-4 h-4" />
-                        SUBMIT REQUEST
+                        {createSubmitting ? "SUBMITTING..." : "SUBMIT REQUEST"}
                       </span>
                     </Button>
                   </div>
