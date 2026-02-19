@@ -138,21 +138,21 @@ async def get_access_request(
 async def review_access_request(
     request_id: int,
     update: AccessRequestUpdate,
-    request: Request,
+    http_request: Request,
     reviewed_by: Optional[int] = None,  # Superadmin user ID
     db: Session = Depends(get_db)
 ):
     """Approve or reject an access request (superadmin only)"""
     from datetime import datetime
     
-    request = db.query(InvestigatorAccessRequest).filter(InvestigatorAccessRequest.id == request_id).first()
-    if not request:
+    access_request = db.query(InvestigatorAccessRequest).filter(InvestigatorAccessRequest.id == request_id).first()
+    if not access_request:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
     
-    if request.status != "pending":
+    if access_request.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Request is already {request.status}"
+            detail=f"Request is already {access_request.status}"
         )
     
     if update.status not in ["approved", "rejected"]:
@@ -162,24 +162,30 @@ async def review_access_request(
         )
     
     # Update request status
-    request.status = update.status
-    if getattr(request.state, "current_user", None):
-        reviewed_by = request.state.current_user.id
-    request.reviewed_by = reviewed_by
-    request.reviewed_at = datetime.utcnow()
+    access_request.status = update.status
+    if getattr(http_request.state, "current_user", None):
+        reviewed_by = http_request.state.current_user.id
+    access_request.reviewed_by = reviewed_by
+    access_request.reviewed_at = datetime.utcnow()
     if update.status == "rejected" and update.rejection_reason:
-        request.rejection_reason = update.rejection_reason
+        access_request.rejection_reason = update.rejection_reason
     
     # If approved, create the investigator account
     if update.status == "approved":
+        existing_user = db.query(User).filter(User.email == access_request.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User with email {access_request.email} already exists"
+            )
         # Generate a temporary password (investigator will need to reset it)
         import secrets
         temp_password = secrets.token_urlsafe(12)
         
         new_user = User(
-            email=request.email,
+            email=access_request.email,
             hashed_password=get_password_hash(temp_password),
-            full_name=request.full_name,
+            full_name=access_request.full_name,
             role="investigator",
             is_active=True
         )
@@ -191,6 +197,6 @@ async def review_access_request(
         # For now, we'll just create the account
     
     db.commit()
-    db.refresh(request)
+    db.refresh(access_request)
     
-    return request.to_dict()
+    return access_request.to_dict()
