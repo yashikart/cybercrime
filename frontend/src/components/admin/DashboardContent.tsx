@@ -157,6 +157,25 @@ export function DashboardContent() {
         wallets = await walletsRes.json();
       }
 
+      // Fetch freeze/unfreeze lists from dedicated enforcement endpoints
+      let frozenWalletRows: any[] = [];
+      let unfrozenWalletRows: any[] = [];
+      try {
+        const [frozenRes, unfrozenRes] = await Promise.all([
+          fetch(apiUrl("wallets/frozen/list"), { headers: authHeaders }),
+          fetch(apiUrl("wallets/unfrozen/list"), { headers: authHeaders }),
+        ]);
+
+        if (frozenRes.ok) {
+          frozenWalletRows = await frozenRes.json();
+        }
+        if (unfrozenRes.ok) {
+          unfrozenWalletRows = await unfrozenRes.json();
+        }
+      } catch (e) {
+        console.error("Error fetching freeze/unfreeze wallet lists:", e);
+      }
+
       // Dashboard-level activity feed
       try {
         const activityRes = await fetch(apiUrl("dashboard/activity-feed?limit=50"), { headers: authHeaders });
@@ -207,10 +226,11 @@ export function DashboardContent() {
         console.error("Error fetching risk trends:", e);
       }
 
-      // Process freeze/unfreeze notifications
+      // Process freeze/unfreeze notifications.
+      // Prefer dedicated endpoints; fallback to wallet list shape for backward compatibility.
       const notifications: any[] = [];
-      wallets.forEach((wallet: any) => {
-        if (wallet.frozen_at) {
+      if (frozenWalletRows.length > 0 || unfrozenWalletRows.length > 0) {
+        frozenWalletRows.forEach((wallet: any) => {
           notifications.push({
             id: `freeze-${wallet.id}`,
             type: "freeze",
@@ -221,8 +241,9 @@ export function DashboardContent() {
             riskLevel: wallet.risk_level || "medium",
             riskScore: wallet.risk_score || 0,
           });
-        }
-        if (wallet.unfrozen_at) {
+        });
+
+        unfrozenWalletRows.forEach((wallet: any) => {
           notifications.push({
             id: `unfreeze-${wallet.id}`,
             type: "unfreeze",
@@ -233,8 +254,35 @@ export function DashboardContent() {
             riskLevel: wallet.risk_level || "medium",
             riskScore: wallet.risk_score || 0,
           });
-        }
-      });
+        });
+      } else {
+        wallets.forEach((wallet: any) => {
+          if (wallet.frozen_at) {
+            notifications.push({
+              id: `freeze-${wallet.id}`,
+              type: "freeze",
+              walletAddress: wallet.address,
+              reason: wallet.freeze_reason || "No reason provided",
+              actionBy: wallet.frozen_by || "Unknown",
+              timestamp: wallet.frozen_at,
+              riskLevel: wallet.risk_level || "medium",
+              riskScore: wallet.risk_score || 0,
+            });
+          }
+          if (wallet.unfrozen_at) {
+            notifications.push({
+              id: `unfreeze-${wallet.id}`,
+              type: "unfreeze",
+              walletAddress: wallet.address,
+              reason: wallet.unfreeze_reason || "No reason provided",
+              actionBy: wallet.unfrozen_by || "Unknown",
+              timestamp: wallet.unfrozen_at,
+              riskLevel: wallet.risk_level || "medium",
+              riskScore: wallet.risk_score || 0,
+            });
+          }
+        });
+      }
 
       // Sort by timestamp (most recent first) and limit to 10
       notifications.sort((a, b) => {
@@ -377,7 +425,10 @@ export function DashboardContent() {
       setComplaintLocations(Array.from(locationMap.values()));
 
       // Calculate stats
-      const frozenWallets = wallets.filter((w: any) => w.is_frozen).length;
+      const frozenWallets =
+        frozenWalletRows.length > 0
+          ? frozenWalletRows.length
+          : wallets.filter((w: any) => w.is_frozen).length;
       const recentComplaints = complaints.filter((c: any) => {
         const date = new Date(c.created_at);
         const now = new Date();
