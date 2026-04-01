@@ -14,6 +14,7 @@ import { InvestigatorStatusContent } from "./InvestigatorStatusContent";
 import { InvestigatorCommunicationContent } from "./InvestigatorCommunicationContent";
 import { AIFraudDetectionContent } from "./AIFraudDetectionContent";
 import { AccessRequestsContent } from "./AccessRequestsContent";
+import { TTSPageButton } from "../ui/TTSPageButton";
 
 export type MenuItem = 
   | "dashboard" 
@@ -77,10 +78,21 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-black">
       <Sidebar activeItem={activeItem} setActiveItem={setActiveItem} onLogout={onLogout} />
-      <main className="flex-1 ml-72 p-6 lg:p-8">
-        {renderContent()}
+      <main className="flex-1 ml-72 p-6 lg:p-8 overflow-y-auto">
+        <div className="flex justify-between items-center mb-8 border-b border-emerald-500/20 pb-4">
+          <div>
+            <h1 className="text-2xl font-mono text-emerald-400 uppercase tracking-widest">
+              {activeItem.replace(/-/g, ' ')}
+            </h1>
+            <p className="text-xs text-gray-500 font-mono mt-1">Admin Control Center / {activeItem}</p>
+          </div>
+          <TTSPageButton />
+        </div>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {renderContent()}
+        </div>
       </main>
     </div>
   );

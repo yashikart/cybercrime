@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     
+    # TTS Configuration
+    TTS_MODEL_NAME: str = "tts_models/multilingual/multi-dataset/xtts_v2"
+    TTS_DEVICE: str = "cpu"  # or "cuda"
+    TTS_OUTPUT_DIR: str = "./tts_output"
+    
     # AI (OpenRouter)
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL: str = "qwen/qwen-2.5-72b-instruct"  # Free model

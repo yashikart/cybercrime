@@ -1,7 +1,4 @@
-/**
- * Text-to-Speech Utility
- * Provides speech synthesis functionality using Web Speech API
- */
+import { apiUrl } from "@/lib/api";
 
 export interface TTSOptions {
   rate?: number; // 0.1 to 10 (default: 1)
@@ -135,6 +132,58 @@ class TextToSpeechService {
     }).catch(() => {
       // Silently fail for notifications
     });
+  }
+
+  /**
+   * Speak text using backend TTS (Coqui/gTTS)
+   */
+  async speakBackend(text: string, language: string = "en"): Promise<void> {
+    if (!text.trim()) return;
+
+    // Stop browser TTS if running
+    this.stop();
+
+    try {
+      const response = await fetch(apiUrl("tts/"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text, language }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Backend TTS failed");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      
+      this.isPlaying = true;
+
+      return new Promise((resolve, reject) => {
+        audio.onended = () => {
+          this.isPlaying = false;
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        audio.onerror = (e) => {
+          this.isPlaying = false;
+          URL.revokeObjectURL(url);
+          reject(e);
+        };
+        audio.play().catch(e => {
+          this.isPlaying = false;
+          URL.revokeObjectURL(url);
+          reject(e);
+        });
+      });
+    } catch (error) {
+      console.warn("Backend TTS Error, falling back to Web Speech API:", error);
+      // Fallback to browser TTS if backend fails
+      return this.speak(text);
+    }
   }
 
   /**

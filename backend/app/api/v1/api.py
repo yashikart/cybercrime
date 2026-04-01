@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     investigator_self_service,
     access_requests,
     system_health,
+    tts,
 )
 
 api_router = APIRouter()
@@ -49,3 +50,4 @@ api_router.include_router(investigator_self_service.router, prefix="/investigato
 api_router.include_router(wallet_fraud.router, prefix="/wallets", tags=["wallet-fraud"])
 api_router.include_router(access_requests.router, prefix="/access-requests", tags=["access-requests"])
 api_router.include_router(system_health.router, prefix="/system", tags=["system-health"])
+api_router.include_router(tts.router, prefix="/tts", tags=["text-to-speech"])

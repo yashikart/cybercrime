@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Shield, FileText, Upload, FolderOpen, Brain, Phone, LogOut, Menu, X, Activity, User, RefreshCw, Bot, AlertTriangle, UploadCloud, Check, Lock, Search, Download, Calendar, Clock, Eye, EyeOff, BarChart3, Clipboard, MapPin, Mail, PhoneCall, Filter, MoreVertical, KeyRound, CheckCircle, XCircle, Bell, ChevronDown, Send, TrendingUp, Target, Award, Loader2 } from "lucide-react";
 import { ttsService } from "@/utils/textToSpeech";
 import { TextToSpeechIconButton } from "../ui/TextToSpeechButton";
+import { TTSPageButton } from "../ui/TTSPageButton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid } from "recharts";
 import { IncidentReportDisplay } from "./IncidentReportDisplay";
@@ -302,6 +303,9 @@ export function InvestigatorDashboard({ setCurrentPage }: InvestigatorDashboardP
                   onViewMessages={() => setActiveSection("messages")}
                 />
               )}
+              
+              <TTSPageButton />
+
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg">
                 <div className="relative">
                   <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>

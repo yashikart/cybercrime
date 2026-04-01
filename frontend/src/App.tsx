@@ -32,6 +32,15 @@ function App() {
       return;
     }
 
+    // LOCAL DEV BYPASS: Automatically log in as superadmin for faster development
+    const DEV_BYPASS = false; 
+    if (DEV_BYPASS && !localStorage.getItem("admin_token") && !localStorage.getItem("investigator_token")) {
+      localStorage.setItem("admin_token", "dev-token");
+      localStorage.setItem("admin_email", "admin@cybercrime.gov");
+      setCurrentPage("admin-dashboard");
+      return;
+    }
+
     const adminToken = localStorage.getItem("admin_token");
     const investigatorToken = localStorage.getItem("investigator_token");
     const savedPage = (localStorage.getItem("current_page") as Page | null) || null;
